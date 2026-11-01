@@ -1,0 +1,3989 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<meta name="theme-color" content="#0f1115" id="metaTheme">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+<title>TNews</title>
+<script>
+/* 外观：默认跟随系统；点左上角 logo 后可在白天/黑夜之间切换，选择记在这台设备上（localStorage 的 tn_theme）。
+   这段必须放在样式前先跑，避免刷新时先闪一下白/黑。 */
+(function(){
+  try{
+    var m = localStorage.getItem('tn_theme');
+    if (m === 'light' || m === 'dark'){
+      document.documentElement.setAttribute('data-theme', m);
+      var tc = document.getElementById('metaTheme');
+      if (tc) tc.setAttribute('content', m === 'light' ? '#f4f5f8' : '#0f1115');
+    }
+  }catch(e){}
+})();
+</script>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0f1115; --bg2:#151922; --card:#181d26; --card2:#1f2530;
+  --line:rgba(255,255,255,.08); --txt:#e9edf3; --dim:#8d97a6; --dim2:#606b7b;
+  --accent:#ffb454; --accent2:#ff8a3d; --ok:#4ade80;
+  --shadow:0 12px 40px rgba(0,0,0,.45);
+  --safe-b:env(safe-area-inset-bottom,0px);
+}
+/* 没手动选过（没有 data-theme）时跟系统；选了白天/黑夜就用下面的属性选择器覆盖 */
+@media (prefers-color-scheme: light){
+  :root:not([data-theme="dark"]){
+    color-scheme:light;
+    --bg:#f4f5f8; --bg2:#eceef3; --card:#ffffff; --card2:#f3f5f9;
+    --line:rgba(20,24,32,.09); --txt:#151a22; --dim:#6b7482; --dim2:#98a0ad;
+    --accent:#e8831a; --accent2:#d96b0a;
+    --shadow:0 10px 30px rgba(20,30,50,.10);
+  }
+}
+html[data-theme="light"]{
+  color-scheme:light;
+  --bg:#f4f5f8; --bg2:#eceef3; --card:#ffffff; --card2:#f3f5f9;
+  --line:rgba(20,24,32,.09); --txt:#151a22; --dim:#6b7482; --dim2:#98a0ad;
+  --accent:#e8831a; --accent2:#d96b0a;
+  --shadow:0 10px 30px rgba(20,30,50,.10);
+}
+html[data-theme="dark"]{ color-scheme:dark }
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--txt);
+  font:15px/1.6 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  padding-bottom:calc(104px + var(--safe-b));
+  -webkit-font-smoothing:antialiased;
+  overscroll-behavior-y:contain;
+}
+button{font-family:inherit;cursor:pointer;border:0;background:none;color:inherit}
+a{color:inherit;text-decoration:none}
+
+/* ---------- 顶栏 ---------- */
+header{
+  position:sticky;top:0;z-index:40;
+  display:flex;align-items:center;gap:10px;
+  padding:calc(12px + env(safe-area-inset-top,0px)) 16px 12px;
+  background:color-mix(in srgb,var(--bg) 82%,transparent);
+  backdrop-filter:saturate(180%) blur(16px);
+  -webkit-backdrop-filter:saturate(180%) blur(16px);
+  border-bottom:1px solid var(--line);
+}
+.logo{display:flex;align-items:center;gap:9px;font-weight:700;font-size:16px;letter-spacing:.2px}
+#logoBtn{cursor:pointer;-webkit-user-select:none;user-select:none;border-radius:10px;transition:transform .12s}
+#logoBtn:active{transform:scale(.94)}
+.logo svg{display:block}
+.logo .sub{font-weight:500;font-size:11px;color:var(--dim);letter-spacing:0;line-height:1.4}
+.logo .sub .autoline{display:block;white-space:nowrap}
+header .spacer{flex:1}
+.iconbtn{
+  width:36px;height:36px;border-radius:11px;display:grid;place-items:center;
+  background:var(--card);border:1px solid var(--line);color:var(--dim);
+  transition:.18s;
+}
+.iconbtn:active{transform:scale(.93)}
+.iconbtn.accent{color:#1a1206;background:linear-gradient(135deg,var(--accent),var(--accent2));border:0}
+.iconbtn.newep{color:#1a1206;background:linear-gradient(135deg,var(--accent),var(--accent2));border:0;animation:newpulse 1.6s ease-in-out infinite}
+@keyframes newpulse{0%,100%{box-shadow:0 0 0 0 rgba(255,180,84,.55)}55%{box-shadow:0 0 0 7px rgba(255,180,84,0)}}
+.volslider{flex:1;min-width:0;height:26px;-webkit-appearance:none;appearance:none;background:transparent;cursor:pointer}
+.volslider::-webkit-slider-runnable-track{height:5px;border-radius:3px;background:var(--card2);border:1px solid var(--line)}
+.volslider::-webkit-slider-thumb{-webkit-appearance:none;width:16px;height:16px;border-radius:50%;background:var(--accent);margin-top:-6.5px}
+.volslider::-moz-range-track{height:5px;border-radius:3px;background:var(--card2);border:1px solid var(--line)}
+.volslider::-moz-range-thumb{width:16px;height:16px;border:0;border-radius:50%;background:var(--accent)}
+
+/* ---------- 主区 ---------- */
+main{padding:16px 16px 8px;max-width:720px;margin:0 auto}
+
+/* 当前节目 */
+.hero{
+  position:relative;overflow:hidden;border-radius:20px;padding:20px;
+  background:
+    radial-gradient(120% 100% at 0% 0%,rgba(255,180,84,.20),transparent 58%),
+    radial-gradient(90% 90% at 100% 0%,rgba(120,140,255,.14),transparent 60%),
+    var(--card);
+  border:1px solid var(--line);
+  box-shadow:var(--shadow);
+}
+.hero .eyebrow{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px;color:var(--dim);margin-bottom:8px}
+/* 天气独立一行，但宽度随内容（不撑满），文字过长才省略 */
+.wxline{flex-basis:100%;display:flex;min-width:0}
+#wxNowPill{white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis}
+/* 跑步模式：期数后的小标签 + hero 里一条窄的公里进度条（底部播放条放不下，挪到上面） */
+.runpill{display:inline-flex;align-items:center;gap:4px;white-space:nowrap}
+.subpill{display:inline-flex;align-items:center;gap:4px;white-space:nowrap;color:var(--accent2)}
+/* 跑步条：吸顶导航正下方，跟随屏幕滚动（top 由 JS 按导航实际高度写入 --hdrH） */
+#runStrip{position:sticky;top:var(--hdrH,56px);z-index:35;margin:0;padding:10px 16px;width:100%;background:color-mix(in srgb,var(--bg) 82%,transparent);border-bottom:1px solid var(--line);backdrop-filter:saturate(180%) blur(16px);-webkit-backdrop-filter:saturate(180%) blur(16px)}
+.runstrip .rsbar{position:relative;height:4px;border-radius:2px;background:rgba(128,140,160,.22);overflow:hidden}
+.runstrip .rsbar i{position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px;transition:width .25s linear}
+.runstrip .rsbar span{position:absolute;inset:0}
+.runstrip .rsbar u{position:absolute;top:-3px;bottom:-3px;width:1.5px;background:currentColor;opacity:.45}
+.runstrip .rstext{display:flex;align-items:center;gap:8px;margin-top:6px;font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;font-variant-numeric:tabular-nums}
+.runstrip .rstext b{color:var(--accent2);font-weight:600}
+.runstrip .rsbgm{margin-left:auto;flex:none;padding:3px 10px;border-radius:8px;font-size:11px;line-height:1.5;background:rgba(255,180,84,.14);border:1px solid rgba(255,180,84,.45);color:var(--accent);cursor:pointer}
+.runstrip .rsbgm:active{transform:scale(.94)}
+#runStrip.hide{display:none}
+.pill{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+  background:rgba(255,180,84,.14);color:var(--accent);font-size:11px;font-weight:600}
+.hero h1{margin:0 0 6px;font-size:21px;line-height:1.3;font-weight:750;letter-spacing:-.2px;text-wrap:balance}
+.hero .meta{color:var(--dim);font-size:12.5px;display:flex;flex-wrap:wrap;gap:14px}
+.hero .meta b{color:var(--txt);font-weight:600}
+
+.wave{display:flex;align-items:flex-end;gap:3px;height:26px;margin:16px 0 4px}
+.wave i{flex:1;background:linear-gradient(180deg,var(--accent),var(--accent2));border-radius:2px;opacity:.28;transform-origin:bottom;}
+.wave.on i{animation:bounce 1.1s ease-in-out infinite;opacity:.85}
+@keyframes bounce{0%,100%{transform:scaleY(.28)}50%{transform:scaleY(1)}}
+
+.bigplay{
+  margin-top:14px;width:100%;height:52px;border-radius:15px;
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  font-size:16px;font-weight:700;color:#1a1206;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  box-shadow:0 8px 24px rgba(255,150,60,.28);
+  transition:.16s;
+}
+.bigplay:active{transform:scale(.98)}
+.bigplay.playing{background:var(--card2);color:var(--txt);box-shadow:none;border:1px solid var(--line)}
+
+/* 时间段条（可点击进入生成设置） */
+.timeline{display:flex;gap:6px;margin-top:14px}
+.timeline + .timeline{margin-top:8px}
+.timeline div{flex:1;text-align:center;padding:8px 4px;border-radius:11px;background:var(--card2);border:1px solid var(--line);position:relative;transition:.15s}
+.timeline div.editable{cursor:pointer}
+.timeline div.editable:active{background:var(--card);border-color:rgba(255,180,84,.4)}
+.timeline .k{font-size:10px;color:var(--dim2);letter-spacing:.4px}
+.timeline .v{font-size:12.5px;font-weight:650;margin-top:1px}
+.timeline div.editable .v::after{content:"›";position:absolute;top:9px;right:8px;font-size:11px;color:var(--dim2);opacity:.8}
+
+/* 分区标题 */
+.sec-title{display:flex;align-items:center;gap:8px;margin:24px 2px 10px;font-size:13px;font-weight:650;color:var(--dim);letter-spacing:.3px}
+.sec-title .n{font-size:11px;font-weight:600;color:var(--dim2);background:var(--card2);padding:1px 7px;border-radius:6px}
+.sec-title .clearmine{margin-left:auto;font-size:11px;font-weight:600;color:var(--dim);background:var(--card2);border:1px solid var(--line);border-radius:8px;padding:3px 10px;cursor:pointer}
+.sec-title .clearmine:hover{color:#e5484d;border-color:rgba(229,72,77,.45)}
+.sec-title .clearmine:disabled{opacity:.42;cursor:not-allowed}
+.sec-title .clearmine[data-armed="1"]{color:#fff;background:#e5484d;border-color:#e5484d}
+
+/* 文稿条目 */
+.item{
+  display:flex;gap:12px;padding:14px 14px 14px 12px;border-radius:15px;
+  background:var(--card);border:1px solid var(--line);margin-bottom:9px;
+  transition:.18s;position:relative;overflow:hidden;
+}
+.item:active{background:var(--card2)}
+.item .idx{flex:0 0 auto;width:22px;font:600 11px/22px ui-monospace,monospace;color:var(--dim2);text-align:center}
+.item .body{flex:1;min-width:0}
+.item .tag{font-size:10.5px;font-weight:600;color:var(--accent);letter-spacing:.3px;margin-bottom:3px;display:flex;gap:8px;align-items:center}
+.item .tag .src{color:var(--dim2);font-weight:500}
+.item h3{margin:0 0 4px;font-size:14.5px;line-height:1.45;font-weight:650;letter-spacing:-.1px}
+.item p{margin:0;font-size:12.8px;line-height:1.6;color:var(--dim);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.item.cur{background:linear-gradient(90deg,rgba(255,180,84,.15),var(--card) 60%);
+  border:1px solid rgba(255,180,84,.75);box-shadow:0 0 0 1px rgba(255,180,84,.28),0 4px 14px rgba(255,150,40,.14)}
+.item.cur::before{content:"";position:absolute;left:0;top:14%;bottom:14%;width:3px;border-radius:0 3px 3px 0;background:linear-gradient(180deg,var(--accent),var(--accent2))}
+.item.cur .idx{color:var(--accent);font-weight:750}
+.item .tm{flex:0 0 auto;font:600 10.5px/1 ui-monospace,monospace;color:var(--dim2);padding-top:3px;display:flex;flex-direction:column;align-items:flex-end;gap:5px}
+.item .readlnk{font:600 10px/1 inherit;font-family:inherit;padding:4px 7px;border-radius:7px;background:var(--card2);color:var(--dim);border:0;white-space:nowrap;transition:.12s;cursor:pointer}
+.item .readlnk:hover{color:var(--accent)}
+.item .readlnk:active{transform:scale(.92)}
+
+/* 空状态 / 加载 */
+.empty{text-align:center;padding:56px 20px;color:var(--dim)}
+.empty h3{color:var(--txt);margin:14px 0 6px;font-size:16px}
+.empty p{margin:0 0 20px;font-size:13px;line-height:1.7}
+.btn-ghost{padding:11px 20px;border-radius:12px;background:var(--card);border:1px solid var(--line);font-size:14px;font-weight:600;color:var(--accent)}
+.spinner{width:20px;height:20px;border:2.5px solid rgba(255,180,84,.2);border-top-color:var(--accent);border-radius:50%;
+  display:inline-block;animation:spin .8s linear infinite;vertical-align:-4px}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* 往期 */
+.history{margin-top:26px}
+.hrow{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:13px;background:var(--card);border:1px solid var(--line);margin-bottom:8px}
+.hdaygrp{margin-bottom:6px}
+.hday{display:flex;align-items:center;gap:8px;padding:9px 6px;cursor:pointer;user-select:none;color:var(--dim2);font-size:12px;font-weight:600}
+.hday .dlabel{color:var(--dim);font-size:12.8px}
+.hday .dn{opacity:.75;font-weight:400}
+.hday .chev{margin-left:auto;display:grid;place-items:center;transition:transform .18s}
+.hday.open .chev{transform:rotate(90deg)}
+.hdaybody{display:none}
+.hdaybody.open{display:block}
+.hrow.active{border-color:rgba(255,180,84,.35)}
+.hrow .hb{flex:1;min-width:0}
+.hrow .ht{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:6px}
+.hrow .ht .ttl{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 跑步模式生成的期数：往期行里也带一个 🏃 小标签 */
+.hrow .hrun{flex:none;display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:7px;
+  font-size:10.5px;font-weight:600;white-space:nowrap;color:var(--accent2);
+  background:rgba(255,180,84,.12);border:1px solid rgba(255,180,84,.28)}
+.hrow .hm{font-size:11.5px;color:var(--dim2);margin-top:2px}
+.hrow .play-s{width:32px;height:32px;border-radius:50%;display:grid;place-items:center;background:var(--card2);color:var(--accent)}
+
+/* ---------- 底部播放器 ---------- */
+.player{
+  position:fixed;left:0;right:0;bottom:0;z-index:50;
+  padding:0 12px calc(10px + var(--safe-b));
+  background:color-mix(in srgb,var(--bg2) 92%,transparent);
+  backdrop-filter:blur(20px) saturate(180%);
+  -webkit-backdrop-filter:blur(20px) saturate(180%);
+  border-top:1px solid var(--line);
+  transform:translateY(0);transition:transform .3s cubic-bezier(.4,0,.2,1);
+}
+.player.hide{transform:translateY(110%)}
+.seek{position:relative;height:22px;display:flex;align-items:center;margin:0 -12px}
+.seek .track{position:relative;height:3px;width:100%;background:rgba(128,140,160,.22);border-radius:2px;overflow:hidden}
+.seek .kmticks{position:absolute;inset:0;pointer-events:none}
+.seek .kmticks i{position:absolute;top:-3px;bottom:-3px;width:2px;background:var(--accent2);opacity:.75;border-radius:1px}
+.seek .fill{position:absolute;inset:0 auto 0 0;width:0%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:2px}
+.seek input{
+  position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;
+}
+.prow{display:flex;align-items:center;gap:12px;padding-bottom:2px}
+.pcover{
+  width:44px;height:44px;border-radius:12px;flex:0 0 auto;display:grid;place-items:center;
+  background:linear-gradient(135deg,rgba(255,180,84,.22),rgba(120,140,255,.18));
+  border:1px solid var(--line);
+}
+.pinfo{flex:1;min-width:0}
+.pinfo .ps{font-size:11.5px;color:var(--dim2);display:flex;gap:8px;white-space:nowrap;overflow:hidden}
+.pinfo .ps span:last-child{overflow:hidden;text-overflow:ellipsis}
+.pctrls{display:flex;align-items:center;gap:4px}
+.pbtn{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;color:var(--txt);transition:.15s}
+.pbtn:active{transform:scale(.9)}
+.pbtn.main{width:46px;height:46px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#1a1206;box-shadow:0 4px 14px rgba(255,150,60,.3)}
+.rate{font:700 11px/1 ui-monospace,monospace;min-width:40px;width:auto;padding:0 6px;height:26px;border-radius:8px;background:var(--card2);border:1px solid var(--line);color:var(--dim);flex:0 0 auto}
+
+/* ---------- 弹窗 ---------- */
+.sheet{position:fixed;inset:0;z-index:80;display:none}
+.sheet.on{display:block}
+.sheet .mask{position:absolute;inset:0;background:rgba(0,0,0,.55);backdrop-filter:blur(3px);animation:fade .2s}
+.sheet .panel{
+  position:absolute;left:0;right:0;bottom:0;border-radius:22px 22px 0 0;
+  background:var(--bg2);border-top:1px solid var(--line);
+  padding:18px 18px calc(20px + var(--safe-b));
+  animation:up .28s cubic-bezier(.32,.72,0,1);
+  max-height:86vh;overflow:auto;
+}
+@keyframes up{from{transform:translateY(100%)}}
+@keyframes fade{from{opacity:0}}
+/* 居中弹窗（登录/注册用），不再是贴底的抽屉 */
+.sheet.center .panel{
+  left:50%;right:auto;bottom:auto;top:50%;
+  transform:translate(-50%,-50%);
+  border-radius:22px;border:1px solid var(--line);
+  width:min(390px, calc(100vw - 36px));
+  animation:pop .22s ease-out;
+}
+@keyframes pop{from{opacity:0;transform:translate(-50%,-47%) scale(.96)}}
+.sheet h3{margin:0 0 4px;font-size:16px}
+.sheet .hint{margin:0 0 16px;font-size:12px;color:var(--dim)}
+.opt{display:flex;align-items:center;gap:11px;padding:13px 14px;border-radius:13px;background:var(--card);border:1px solid var(--line);margin-bottom:9px;transition:.15s}
+.opt .ck{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--dim2);display:grid;place-items:center;flex:0 0 auto;transition:.15s}
+.opt.on .ck{background:var(--accent);border-color:var(--accent)}
+.opt.on .ck svg{opacity:1}
+.opt .ck svg{opacity:0}
+.opt .ol{flex:1;font-size:14px;font-weight:600}
+.opt .od{font-size:11.5px;color:var(--dim2);font-weight:400;margin-top:1px}
+
+/* ---- 生成设置面板 ---- */
+.group{margin-bottom:18px}
+/* 设置面板：分类折叠 */
+.expandbar{display:flex;align-items:center;gap:14px;margin:2px 2px 12px}
+.expandbar label{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--dim);cursor:pointer;user-select:none}
+.expandbar label span,.expandbar .hint{line-height:16px}
+.expandbar input{accent-color:var(--accent);width:16px;height:16px;margin:0}
+.expandbar .hint{font-size:11px;color:var(--dim2);margin:0}
+.cgroup{margin-bottom:12px;border:1px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden}
+.cghead{display:flex;align-items:center;justify-content:space-between;padding:13px 14px;font-size:13.5px;font-weight:700;cursor:pointer;user-select:none}
+.cghead .chev{font-style:normal;color:var(--dim2);transition:transform .18s;font-size:12px}
+.cgroup.open .cghead .chev{transform:rotate(180deg)}
+.cgbody{display:none;padding:0 14px 6px}
+.cgroup.open .cgbody{display:block}
+.actions{display:flex;gap:10px;align-items:stretch;margin-top:14px}
+.actions .submit{flex:1;margin-top:0}
+.actbtn{height:50px;padding:0 24px;border-radius:14px;background:var(--card2);border:1px solid var(--line);color:var(--txt);font-size:14px;font-weight:600;cursor:pointer}
+.actbtn:active{transform:scale(.97)}
+.actbtn.wide{width:100%;margin-top:10px}
+.glabel{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 2px 9px;
+  font-size:11.5px;color:var(--dim);font-weight:650;letter-spacing:.4px;text-transform:none}
+.glabel .tools{display:flex;gap:10px;font-weight:600}
+.glabel .tools button{font-size:11.5px;color:var(--accent);padding:2px 0}
+.glabel .tools button.mute{color:var(--dim2)}
+
+.seg{display:flex;gap:6px;flex-wrap:wrap}
+.seg button{flex:1;min-width:60px;padding:10px 4px;border-radius:11px;background:var(--card);
+  border:1px solid var(--line);font-size:12.5px;font-weight:650;color:var(--dim);transition:.15s}
+.seg button.on{background:rgba(255,180,84,.15);border-color:rgba(255,180,84,.5);color:var(--accent)}
+.seg button:active{transform:scale(.96)}
+
+/* 我的账号：播客订阅 / 外部订阅 / 外部调用，地址不直接摊开，只给「复制地址」 */
+.asec{margin-top:11px;padding-top:10px;border-top:1px dashed var(--line)}
+.asec-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.asec-head .alb{font-size:12.5px;font-weight:650;color:var(--txt)}
+.acopy{padding:5px 11px;border-radius:8px;background:var(--card);border:1px solid var(--line);
+  font-size:11.5px;font-weight:600;color:var(--accent);transition:.15s}
+.acopy:active{transform:scale(.96)}
+.acopy[disabled]{opacity:.38;color:var(--dim2);border-color:var(--line)}
+.asec-note{margin-top:6px;font-size:11.5px;color:var(--dim);line-height:1.7}
+
+.field{display:flex;align-items:center;gap:9px;margin-top:9px}
+.field input{
+  flex:1;min-width:0;width:100%;box-sizing:border-box;background:var(--card);border:1px solid var(--line);
+  border-radius:11px;color:var(--txt);padding:11px 12px;font-size:14px;font-family:inherit;font-weight:600;
+  -webkit-appearance:none;appearance:none;outline:none;transition:border-color .15s;
+}
+.field input:focus{border-color:rgba(255,180,84,.55)}
+.field input::placeholder{color:var(--dim2);font-weight:500}
+.field input[type=time]::-webkit-calendar-picker-indicator{filter:invert(.6);cursor:pointer}
+.field .arrow{color:var(--dim2);font-size:13px;flex:0 0 auto}
+.field .span{flex:0 0 auto;font-size:11.5px;color:var(--dim2);min-width:44px;text-align:right}
+.field input[type=number]::-webkit-inner-spin-button{-webkit-appearance:none}
+
+.sheet-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:14px}
+.sheet-head h3{margin:0 0 4px}
+.sheet-head .hint{margin:0}
+.sheet-actions{display:flex;gap:8px;flex:0 0 auto;padding-top:2px}
+.sheet-actions button{
+  font-size:12px;font-weight:650;color:var(--dim);background:var(--card);
+  border:1px solid var(--line);border-radius:9px;padding:7px 12px;transition:.15s;
+}
+.sheet-actions button:active{transform:scale(.95)}
+.sheet-actions button:first-child{color:var(--accent)}
+
+.cats{display:flex;flex-wrap:wrap;gap:7px}
+.chip{padding:8px 13px;border-radius:10px;background:var(--card);border:1px solid var(--line);
+  font-size:13px;font-weight:650;color:var(--dim);transition:.15s;display:flex;align-items:center;gap:6px}
+.chip.on{background:rgba(255,180,84,.15);border-color:rgba(255,180,84,.5);color:var(--accent)}
+.chip:active{transform:scale(.96)}
+.chip .dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.55}
+.chip.on .dot{opacity:1}
+
+.srcgrp{border:1px solid var(--line);border-radius:13px;background:var(--card);margin-bottom:8px;overflow:hidden}
+.srchd{display:flex;align-items:center;gap:10px;padding:12px 13px;cursor:pointer;user-select:none}
+.srchd .ck{width:19px;height:19px;border-radius:6px;border:1.5px solid var(--dim2);display:grid;place-items:center;flex:0 0 auto;transition:.15s}
+.srchd.on .ck{background:var(--accent);border-color:var(--accent)}
+.srchd.on .ck svg{opacity:1}
+.srchd .ck svg{opacity:0}
+.srchd .nm{flex:1;font-size:13.5px;font-weight:650}
+.srchd .cnt{font-size:11px;color:var(--dim2);font-weight:600}
+.srchd .cv{transition:transform .2s;color:var(--dim2)}
+.srchd.open .cv{transform:rotate(90deg)}
+.srcbody{display:none;border-top:1px solid var(--line)}
+.srcbody.open{display:block}
+.srow{display:flex;align-items:center;gap:10px;padding:11px 13px 11px 42px;font-size:12.8px;
+  border-bottom:1px solid var(--line);cursor:pointer;color:var(--dim)}
+.srow:last-child{border-bottom:0}
+.srow .ck{width:17px;height:17px;border-radius:5px;border:1.5px solid var(--dim2);display:grid;place-items:center;flex:0 0 auto;transition:.15s}
+.srow.on .ck{background:var(--accent);border-color:var(--accent)}
+.srow.on .ck svg{opacity:1}
+.srow .ck svg{opacity:0}
+.srow.on{color:var(--txt)}
+.srow .snm{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sharein{width:56px;flex:0 0 auto;padding:5px 7px;border-radius:8px;border:1px solid var(--line);
+  background:var(--card2);color:var(--txt);font-size:12px;text-align:right;outline:none}
+.sharein:focus{border-color:var(--accent)}
+.sharein::placeholder{color:var(--dim2);text-align:center}
+
+.sumline{display:block;line-height:1.7;margin-top:9px;padding:9px 12px;border-radius:10px;
+  background:var(--card2);border:1px solid var(--line);font-size:11.5px;color:var(--dim2);overflow-wrap:break-word}
+.sumline b{color:var(--accent);font-weight:650}
+
+.addfeed{margin-top:11px;border-top:1px dashed var(--line);padding-top:11px}
+.addfeed .af-row{display:flex;gap:7px;margin-bottom:7px}
+.addfeed input{
+  flex:1;min-width:0;background:var(--card);border:1px solid var(--line);border-radius:9px;
+  color:var(--txt);padding:9px 11px;font-size:12.5px;font-family:inherit;
+}
+.addfeed select{
+  flex:0 0 108px;background:var(--card);border:1px solid var(--line);border-radius:9px;
+  color:var(--txt);padding:9px 8px;font-size:12.5px;font-family:inherit;
+}
+#guestSel{
+  width:100%;background:var(--card);border:1px solid var(--line);border-radius:9px;
+  color:var(--txt);padding:10px 11px;font-size:12.5px;font-family:inherit;
+}
+.addfeed button{
+  flex:0 0 auto;background:var(--card);border:1px solid rgba(255,180,84,.5);border-radius:9px;
+  color:var(--accent);font-size:12.5px;font-weight:700;padding:9px 14px;transition:.15s;
+}
+.addfeed button:active{transform:scale(.95)}
+.addfeed button:disabled{opacity:.5}
+
+.submit{width:100%;height:50px;border-radius:14px;margin-top:8px;font-size:15.5px;font-weight:700;color:#1a1206;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));transition:.15s}
+.submit:disabled{opacity:.5}
+.submit:active{transform:scale(.98)}
+.verline{margin-top:12px;text-align:center;font-size:11px;color:var(--dim2);font-variant-numeric:tabular-nums}
+.toast{
+  position:fixed;left:50%;bottom:calc(120px + var(--safe-b));transform:translateX(-50%) translateY(12px);
+  background:rgba(28,32,40,.95);color:#fff;padding:11px 18px;border-radius:12px;font-size:13px;
+  opacity:0;pointer-events:none;transition:.25s;z-index:99;max-width:88vw;text-align:center;
+  box-shadow:0 8px 30px rgba(0,0,0,.4);
+}
+.toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ---------- 账号 / 用户管理 ---------- */
+.iconbtn.me{color:var(--accent);border-color:rgba(255,180,84,.4)}
+.guestbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;
+  padding:10px 12px;border-radius:12px;background:rgba(255,180,84,.10);
+  border:1px solid rgba(255,180,84,.28);font-size:12.5px;color:var(--dim)}
+.guestbar b{color:var(--accent)}
+.panel.guest .group,.panel.guest .addfeed{opacity:.45;pointer-events:none}
+/* 访客也能用的播放偏好：背景音乐 / 跨日连续播放 / 睡眠暂停（只存在当前会话，访客间互不影响） */
+.panel.guest .group.playable{opacity:1;pointer-events:auto}
+.panel.guest .submit{display:none}
+.urow{display:flex;align-items:center;flex-wrap:wrap;row-gap:6px;gap:7px;padding:9px 2px;border-bottom:1px solid var(--line);font-size:12.5px}
+.urow:last-child{border-bottom:0}
+.urow .em{flex:1 0 100%;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:600}
+.urow .utag{flex:0 0 auto;font-size:10px;padding:1px 6px;border-radius:6px;background:var(--card2);color:var(--dim2)}
+.urow .utag.admin{color:var(--accent);background:rgba(255,180,84,.12)}
+.urow .utag.off{color:#ff6b6b;background:rgba(255,107,107,.10)}
+.urow .utag.uid{cursor:pointer;user-select:none;letter-spacing:.5px}
+.urow .ops{flex:0 0 auto;display:flex;flex-wrap:wrap;gap:2px}
+.urow .ops button{font-size:11px;color:var(--dim);padding:4px 7px;border-radius:8px;background:var(--card2);transition:.12s}
+.urow .ops button.danger{color:#ff6b6b}
+.urow .ops button:active{transform:scale(.93)}
+.btnclear{width:100%;height:40px;border-radius:11px;margin-top:9px;font-size:13px;font-weight:650;
+  color:#ff6b6b;background:rgba(255,107,107,.10);border:1px solid rgba(255,107,107,.3);transition:.15s}
+.btnclear:active{transform:scale(.98)}
+.btnghost{width:100%;height:38px;border-radius:11px;margin-top:9px;font-size:13px;font-weight:650;
+  color:var(--txt);background:var(--card2);border:1px solid var(--line);transition:.15s}
+.btnghost:active{transform:scale(.98)}
+.btnghost:disabled{opacity:.55}
+/* 首页底部：项目主页入口（config.yaml 的 repo_url 为空时整块隐藏） */
+.sitefoot{display:flex;justify-content:center;margin:20px 0 4px}
+.sitefoot a{display:inline-flex;align-items:center;gap:7px;padding:8px 14px;border-radius:999px;
+  font-size:12.5px;color:var(--dim);text-decoration:none;border:1px solid var(--line);
+  background:var(--card2);transition:.15s}
+.sitefoot a:active,.sitefoot a:hover{color:var(--accent);border-color:rgba(255,180,84,.45)}
+
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo" id="logoBtn" role="button" tabindex="0" title="点击切换白天 / 黑夜">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+      <rect x="2" y="9" width="2.6" height="6" rx="1.3" fill="var(--accent)"/>
+      <rect x="7" y="5.5" width="2.6" height="13" rx="1.3" fill="var(--accent)"/>
+      <rect x="12" y="2.5" width="2.6" height="19" rx="1.3" fill="var(--accent2)"/>
+      <rect x="17" y="7" width="2.6" height="10" rx="1.3" fill="var(--accent)"/>
+    </svg>
+    <div id="appName">TNews<div class="sub" id="clock">—</div></div>
+  </div>
+  <div class="spacer"></div>
+  <button class="iconbtn" id="btnQuickGen" title="快速生成（沿用上次设置）">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M13 2 4.5 13.5H11L10 22l8.5-11.5H12L13 2z"/>
+    </svg>
+  </button>
+  <button class="iconbtn" id="btnQuickRun" title="跑步快速生成（用上次设置的距离和用时）"><span style="font-size:15px;line-height:1">🏃</span></button>
+  <button class="iconbtn" id="btnUser" title="登录 / 注册">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+      <circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.4-3.4 4.2-5.2 7.5-5.2s6.1 1.8 7.5 5.2"/>
+    </svg>
+  </button>
+  <button class="iconbtn accent" id="btnGen" title="设置 / 生成新一期">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="3.2"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33h.01a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51h.01a1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82v.01a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>
+  </button>
+</header>
+<div id="runStrip" class="runstrip hide"></div>
+
+<main>
+  <div id="content">
+    <div class="empty"><span class="spinner"></span><h3>正在加载…</h3></div>
+  </div>
+  <div class="sitefoot" id="siteFoot" style="display:none">
+    <a id="footRepo" href="#" target="_blank" rel="noopener noreferrer" title="在浏览器中打开项目主页">
+      <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+        <path d="M8 0C3.58 0 0 3.58 0 8a8 8 0 0 0 5.47 7.59c.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.5-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82a7.4 7.4 0 0 1 2-.27c.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8 8 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+      </svg>
+      <span id="footRepoText">项目主页</span>
+    </a>
+  </div>
+</main>
+
+<div class="player hide" id="player">
+  <div class="seek">
+    <div class="track"><div class="fill" id="fill"></div><div class="kmticks" id="kmTicks"></div></div>
+    <input type="range" id="seekRange" min="0" max="1000" value="0" step="1">
+  </div>
+  <div class="prow">
+    <div class="pcover">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="9" width="2.4" height="6" rx="1.2" fill="var(--accent)"/>
+        <rect x="8" y="5" width="2.4" height="14" rx="1.2" fill="var(--accent)"/>
+        <rect x="13" y="3" width="2.4" height="18" rx="1.2" fill="var(--accent2)"/>
+        <rect x="18" y="8" width="2.4" height="8" rx="1.2" fill="var(--accent)"/>
+      </svg>
+    </div>
+    <div class="pinfo">
+      <div class="ps"><span id="pTime">00:00 / 00:00</span><span id="pChapter"></span><span id="pQueue" style="color:var(--accent)"></span></div>
+    </div>
+    <div class="pctrls">
+      <button class="rate" id="btnRate">1×</button>
+      <button class="pbtn" id="btnBack15" title="后退15秒">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M11 5 6 9l5 4"/><path d="M6 9h7a5 5 0 0 1 0 10h-3"/>
+        </svg>
+      </button>
+      <button class="pbtn main" id="btnPlay">
+        <svg id="icoPlay" width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        <svg id="icoPause" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" style="display:none"><rect x="7" y="5" width="3.6" height="14" rx="1.4"/><rect x="13.4" y="5" width="3.6" height="14" rx="1.4"/></svg>
+      </button>
+      <button class="pbtn" id="btnFwd15" title="前进15秒">
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m13 5 5 4-5 4"/><path d="M18 9h-7a5 5 0 0 0 0 10h3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="mask" data-close></div>
+  <div class="panel">
+    <div class="sheet-head">
+      <div>
+        <h3>设置与生成</h3>
+        <p class="hint">可设置时间范围、语速、时长、分类、抓取源等，确认后保存生成</p>
+      </div>
+      <div class="sheet-actions">
+        <button id="btnResetGen" title="恢复本档节目的默认设置">重置</button>
+        <button id="btnBackSheet" title="关闭设置面板">返回</button>
+      </div>
+    </div>
+
+    <div class="guestbar" id="guestBar" style="display:none">
+      <span>访客模式：可收听管理员发布的节目，登录后可生成自己的节目并保存设置</span>
+      <button id="btnGuestLogin" style="flex:0 0 auto;color:var(--accent);font-weight:700">登录 / 注册</button>
+    </div>
+
+    <div class="expandbar">
+      <label><input type="checkbox" id="expandAll"><span>全部展开</span></label>
+      <span class="hint">默认收起，点分组标题可单独展开</span>
+    </div>
+
+    <div class="cgroup" data-cg="av">
+      <div class="cghead"><span>播报</span><i class="chev">▾</i></div>
+      <div class="cgbody">
+        <div class="group" id="wxGroup" style="display:none">
+          <div class="glabel"><span>今日天气</span><span class="tools" id="wxState"></span></div>
+          <div class="cats" id="wxSeg"></div>
+          <div id="wxBox">
+            <div class="addfeed">
+              <div class="af-row">
+                <input id="wxPlace" placeholder="地区名，如：上海、杭州" maxlength="30">
+                <button id="wxSave">搜索并保存</button>
+              </div>
+              <div class="af-row">
+                <button id="wxLocate" style="flex:0 0 auto">使用当前位置</button>
+              </div>
+            </div>
+            <div id="wxResults"></div>
+            <div class="sumline" id="wxHint" style="display:block;line-height:1.7">先选好地区再开启即可；「使用当前位置」优先用浏览器定位（HTTPS 下可用），被拒时按你当前网络的 IP 城市定位，不会持续跟踪</div>
+          </div>
+        </div>
+        <div class="group playable" id="bgmGroup">
+          <div class="glabel"><span>背景轻音乐</span><span class="tools" id="bgmState"></span></div>
+          <div class="cats" id="bgmSeg"></div>
+          <div class="field" id="bgmVolBox" style="display:none">
+            <input type="range" id="bgmVol" class="volslider" min="0" max="100" step="1">
+            <span class="span" id="bgmVolTxt">音量 15%</span>
+          </div>
+          <div class="sumline">开启后收听时叠加一段纯音乐（内置 6 首免版税音乐，同风格每次播放随机选一首）。<b>轻柔</b> = 氛围静电台、适合睡前；<b>激进</b> = 电子律动；<b>愉快</b> = 轻快弦乐。</div>
+        </div>
+
+        <div class="group playable">
+          <div class="glabel"><span>跨日连续播放</span></div>
+          <div class="seg" id="crossdaySeg"></div>
+          <div class="sumline" id="crossdayHint" style="display:block;line-height:1.8">关闭时只播当天；开启后当天播完自动接前一天（以及更早的日期），顺序跟随首页选的 正序/倒序</div>
+        </div>
+
+        <div class="group playable">
+          <div class="glabel"><span>睡眠暂停</span><span class="tools" id="sleepState"></span></div>
+          <div class="seg" id="sleepSeg"></div>
+          <div class="field" id="sleepCustomBox" style="display:none">
+            <input type="number" id="sleepCustom" min="1" max="240" step="1" inputmode="numeric">
+            <span class="span">分钟（1~240）</span>
+          </div>
+          <div class="sumline" id="sleepHint" style="display:block;line-height:1.8">开始收听即开始倒计时，时间到了强制暂停播放（剩余时间显示在顶部节目名右侧，点一下可取消）</div>
+        </div>
+      </div>
+    </div>
+	
+    <div class="cgroup" data-cg="gen">
+      <div class="cghead"><span>生成</span><i class="chev">▾</i></div>
+      <div class="cgbody">	  
+        <div class="group">
+          <div class="glabel"><span>语速</span></div>
+          <div class="seg" id="rateSeg"></div>
+        </div>
+
+        <div class="group">
+          <div class="glabel"><span>音色</span></div>
+          <div class="seg" id="voiceSeg"></div>
+        </div>
+        <div class="group">
+          <div class="glabel"><span>时间范围</span></div>
+          <div class="seg" id="modeSeg">
+            <button data-mode="recent">最近几小时</button>
+            <button data-mode="custom">自定义时段</button>
+          </div>
+          <div id="recentBox">
+            <div class="field" style="margin-top:9px">
+              <div class="seg" id="lbSeg" style="flex:1"></div>
+            </div>
+            <div class="field" id="lbCustomBox" style="display:none">
+              <input type="number" id="lbCustom" min="1" max="72" step="1" inputmode="numeric">
+              <span class="span">小时（1~72）</span>
+            </div>
+          </div>
+          <div id="customBox" style="display:none">
+            <div class="field">
+              <input type="time" id="winStart" step="60">
+              <span class="arrow">→</span>
+              <input type="time" id="winEnd" step="60">
+              <span class="span" id="winSpan"></span>
+            </div>
+          </div>
+          <div class="sumline" id="winPreview">—</div>
+        </div>
+
+        <div class="group">
+          <div class="glabel"><span>目标时长</span><span class="tools" id="durItems"></span></div>
+          <div class="seg" id="durSeg"></div>
+          <div class="field" id="durCustomBox" style="display:none">
+            <input type="number" id="durCustom" min="2" max="120" step="1" inputmode="numeric">
+            <span class="span">分钟（2~120）</span>
+          </div>
+          <div class="sumline" id="durHint" style="display:block;line-height:1.8">—</div>
+        </div>
+
+        <div class="group">
+          <div class="glabel"><span>播报顺序</span></div>
+          <div class="seg" id="sortSeg"></div>
+          <div class="sumline" id="sortHint">—</div>
+        </div>
+        <div class="group">
+          <div class="glabel"><span>跑步模式🏃</span></div>
+          <div class="field" style="margin-top:8px">
+            <input type="number" id="runKm" min="0.5" max="200" step="0.1" inputmode="decimal" placeholder="5" style="width:74px">
+            <span class="span">公里</span>
+            <input type="number" id="runMin" min="3" max="360" step="1" inputmode="numeric" placeholder="30" style="width:74px;margin-left:8px">
+            <span class="span">分钟用时</span>
+          </div>
+          <div class="sumline" id="runHint" style="display:block;line-height:1.8">填入距离和预计用时，按你跑步的节奏生成一期新闻，开跑时按下播放，到终点正好收尾</div>
+          <button class="actbtn" id="btnRunGen" style="margin-top:8px;width:100%">快速生成跑步节目</button>
+        </div>		
+      </div>
+    </div>
+    <div class="cgroup" data-cg="src">
+      <div class="cghead"><span>数据源</span><i class="chev">▾</i></div>
+      <div class="cgbody">
+        <div class="group">
+          <div class="glabel">
+            <span>新闻分类</span>
+            <span class="tools"><button id="catAll">全选</button><button id="catNone" class="mute">清空</button></span>
+          </div>
+          <div class="cats" id="catList"></div>
+        </div>
+        <div class="group">
+          <div class="glabel">
+            <span>获取源 <span id="srcCount" style="font-weight:600;color:var(--dim2)"></span></span>
+            <span class="tools"><button id="srcAll">全选</button><button id="srcNone" class="mute">清空</button></span>
+          </div>
+          <div id="srcList"></div>
+          <div class="addfeed">
+            <div class="af-row">
+              <input id="cfName" placeholder="源名称，如：我的博客" maxlength="40">
+              <select id="cfCat"></select>
+            </div>
+            <div class="af-row">
+              <input id="cfUrl" placeholder="RSS/Atom 订阅地址 https://…" inputmode="url">
+              <button id="cfAdd">添加</button>
+            </div>
+            <div class="sumline">支持任何标准 RSS / Atom 订阅地址（XML 里有 &lt;rss&gt; 或 &lt;feed&gt;），添加时会自动校验是否可访问、格式是否正确</div>
+            <div class="sumline">每个源右侧可填<b>生成占比</b>（%）：填 50 表示本期约一半条数来自该源；留空不参考。源内条目不够占比时按实际条数计，其余名额分给未设占比的源</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="cgroup" data-cg="auto" id="cgAuto">
+      <div class="cghead"><span>自动化</span><i class="chev">▾</i></div>
+      <div class="cgbody">
+        <div class="group" id="autoGroup">
+          <div class="glabel"><span>自动更新</span><span class="tools" id="autoState"></span></div>
+          <div class="cats" id="autoSeg"></div>
+          <div class="field" id="autoStartBox" style="display:none">
+            <input type="time" id="autoStart" step="60">
+            <span class="span">开始时间</span>
+          </div>
+          <div class="sumline" id="autoHint" style="display:block;line-height:1.8">开启后按你上面选的时间范围、语速、分类和源，每隔一段时间自动生成一期；每个账号各自设置、互不影响，生成出的节目归各自的账号</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cgroup" data-cg="ui">
+      <div class="cghead"><span>外观</span><i class="chev">▾</i></div>
+      <div class="cgbody">
+        <div class="group">
+          <div class="glabel"><span>白天 / 黑夜</span><span class="tools" id="themeState"></span></div>
+          <div class="seg" id="themeSeg"></div>
+          <div class="sumline">默认跟随系统。点左上角 logo 也能在白天与黑夜之间快速切换；这里可随时改回「跟随系统」。选择只记在这台设备上，不随账号同步。</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="cgroup" data-cg="acct" id="cgAdmin" style="display:none">
+      <div class="cghead"><span>全局管理</span><i class="chev">▾</i></div>
+      <div class="cgbody">
+        <div class="group">
+          <div class="glabel"><span>允许速听分享</span></div>
+          <div class="seg" id="subSeg"></div>
+        </div>
+        <div class="group">
+          <div class="glabel"><span>允许播客订阅</span></div>
+          <div class="seg" id="podSeg"></div>
+        </div>
+        <div class="group">
+          <div class="glabel"><span>允许接口调用</span></div>
+          <div class="seg" id="extSeg"></div>
+        </div>
+        <div class="group" id="guestGroup">
+          <div class="glabel"><span>首页访客指向</span><span class="tools" id="guestState"></span></div>
+          <select id="guestSel"></select>
+          <div class="sumline">没登录的人打开首页时听谁的节目（默认管理员自己）。该账号需在「我的账号 → 速听分享」里开启；关掉则访客打开首页没有内容，提示登录。</div>
+        </div>
+        <div class="group" id="adminGroup">
+          <div class="glabel"><span>往期节目保留</span><span class="tools" id="retState"></span></div>
+          <div class="cats" id="retSeg"></div>
+          <div class="sumline">超过保留期的节目会在每天凌晨 4:10 自动清理（仅清理音频与记录，不影响其他设置）</div>
+          <button class="btnclear" id="btnClearEps">清除全部往期节目</button>
+        </div>
+
+        <div class="group" id="usersGroup">
+          <div class="glabel"><span>用户管理</span><span class="tools" id="userCount"></span></div>
+          <div id="userList"></div>
+        </div>
+        <div class="group" id="verGroup">
+          <div class="glabel"><span>版本更新</span><span class="tools" id="verBadge"></span></div>
+          <div class="sumline" id="verHint">正在检查…</div>
+          <button class="btnghost" id="btnCheckVer">检查更新</button>
+        </div>		
+      </div>
+    </div>
+    <div class="actions">	  
+      <button class="submit" id="btnDoGen">保存并生成</button>
+    </div>
+      <button id="btnSavePrefs" class="actbtn wide">仅保存</button>	
+    <button id="btnBackBottom" class="actbtn wide">返回</button>
+    <div id="verLine" class="verline"></div>
+  </div>
+</div>
+
+<div class="sheet center" id="authSheet">
+  <div class="mask" data-aclose></div>
+  <div class="panel" style="max-width:390px">
+    <div class="sheet-head">
+      <div>
+        <h3 id="authTitle">登录</h3>
+        <p class="hint" id="authHint">登录后可生成节目、保存自定义设置</p>
+      </div>
+      <div class="sheet-actions"><button id="btnAuthBack">返回</button></div>
+    </div>
+
+    <div id="authFormBox">
+      <div class="group">
+        <div class="seg" id="authTabs">
+          <button data-t="login" class="on">登录</button>
+          <button data-t="register">注册</button>
+        </div>
+      </div>
+      <div class="group">
+        <div class="glabel"><span>账号</span></div>
+        <div class="field"><input id="authEmail" type="text" autocomplete="username"></div>
+      </div>
+      <div class="group">
+        <div class="glabel"><span>密码</span></div>
+        <div class="field"><input id="authPass" type="password" autocomplete="current-password" placeholder="至少 6 位"></div>
+      </div>
+      <button class="submit" id="btnAuthGo">登录</button>
+    </div>
+
+    <div id="authAccountBox" style="display:none">
+      <div id="acctLine" style="display:block;background:var(--card2);border:1px solid var(--line);border-radius:10px;padding:12px 14px;font-size:12.5px;color:var(--dim);line-height:2.1"></div>
+      <button class="submit" id="btnLogout" style="background:var(--card2);color:var(--txt);margin-top:12px">退出登录</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+/* 外部订阅：以 /s/<令牌> 打开（或 ?sub=令牌）时，之后所有 /api 请求都带上 sub，
+   由后端解析成「只读的该账号身份」——界面与访客一致，只是看到的是这个账号的节目。 */
+const SUB_TOKEN = (() => {
+  try {
+    const m = location.pathname.match(/^\/s\/([A-Za-z0-9_-]{8,128})\/?$/);
+    if (m) return m[1];
+    const q = new URLSearchParams(location.search).get('sub');
+    return q ? q.trim() : '';
+  } catch(e){ return ''; }
+})();
+/* ---------------- 外观：白天 / 黑夜（默认跟随系统） ----------------
+   存储：localStorage.tn_theme = 'light' | 'dark'，没有值 = 跟随系统（auto）。
+   点左上角 logo 在白天/黑夜之间切换；设置面板「外观」里可以改回跟随系统。 */
+const THEME_KEY = 'tn_theme';
+const mqLight = window.matchMedia ? window.matchMedia('(prefers-color-scheme: light)') : null;
+function themeMode(){
+  try{ const v = localStorage.getItem(THEME_KEY); return (v === 'light' || v === 'dark') ? v : 'auto'; }
+  catch(e){ return 'auto'; }
+}
+function sysTheme(){ return (mqLight && mqLight.matches) ? 'light' : 'dark'; }
+function effectiveTheme(){ const m = themeMode(); return m === 'auto' ? sysTheme() : m; }
+function applyTheme(mode){
+  const m = (mode === 'light' || mode === 'dark') ? mode : 'auto';
+  const eff = m === 'auto' ? sysTheme() : m;
+  const root = document.documentElement;
+  if (m === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', m);
+  root.setAttribute('data-theme-mode', m);
+  const tc = document.getElementById('metaTheme');
+  if (tc) tc.setAttribute('content', eff === 'light' ? '#f4f5f8' : '#0f1115');
+  const lb = document.getElementById('logoBtn');
+  if (lb) lb.title = (eff === 'light' ? '当前：白天' : '当前：黑夜') + (m === 'auto' ? '（跟随系统）' : '')
+    + '，点击切换到' + (eff === 'light' ? '黑夜' : '白天');
+  syncThemeSeg();
+}
+function setTheme(mode, quiet){
+  const m = (mode === 'light' || mode === 'dark') ? mode : 'auto';
+  try{
+    if (m === 'auto') localStorage.removeItem(THEME_KEY); else localStorage.setItem(THEME_KEY, m);
+  }catch(e){}
+  applyTheme(m);
+  if (!quiet) toast(m === 'auto' ? '已恢复跟随系统' : (m === 'light' ? '白天模式' : '黑夜模式'), 1600);
+}
+function toggleTheme(){ setTheme(effectiveTheme() === 'light' ? 'dark' : 'light'); }
+/* 设置面板里的分段控件（可能还没渲染出来，取不到就跳过） */
+function syncThemeSeg(){
+  const el = document.getElementById('themeSeg');
+  if (!el) return;
+  const cur = themeMode();
+  el.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.th === cur));
+  const st = document.getElementById('themeState');
+  if (st) st.textContent = cur === 'auto'
+    ? '跟随系统 · ' + (sysTheme() === 'light' ? '白天' : '黑夜')
+    : (cur === 'light' ? '白天' : '黑夜');
+}
+function renderThemeSeg(){
+  const el = document.getElementById('themeSeg');
+  if (!el) return;
+  const cur = themeMode();
+  el.innerHTML = [['auto', '跟随系统'], ['light', '白天'], ['dark', '黑夜']].map(([v, t]) =>
+    `<button data-th="${v}" class="${cur === v ? 'on' : ''}">${t}</button>`).join('');
+  el.querySelectorAll('button').forEach(b => { b.onclick = () => setTheme(b.dataset.th); });
+  syncThemeSeg();
+}
+if (mqLight){
+  const onSysThemeChange = () => { if (themeMode() === 'auto') applyTheme('auto'); };
+  if (mqLight.addEventListener) mqLight.addEventListener('change', onSysThemeChange);
+  else if (mqLight.addListener) mqLight.addListener(onSysThemeChange);
+}
+(function bindLogoTheme(){
+  const lb = document.getElementById('logoBtn');
+  if (!lb) return;
+  lb.addEventListener('click', toggleTheme);
+  // 键盘/无障碍：回车、空格也能切
+  lb.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' '){ e.preventDefault(); toggleTheme(); }
+  });
+})();
+applyTheme(themeMode());
+
+function authHeaders(extra){
+  // 订阅模式不带自己的登录令牌，否则会盖掉订阅身份（看到的是自己的节目）
+  const t = SUB_TOKEN ? null : localStorage.getItem('nr_token');
+  return Object.assign({}, t ? { Authorization: 'Bearer ' + t } : {}, extra || {});
+}
+let authKicked = false;
+const api = (p, o) => {
+  if (SUB_TOKEN && p.startsWith('/api/')){
+    p += (p.includes('?') ? '&' : '?') + 'sub=' + encodeURIComponent(SUB_TOKEN);
+  }
+  o = Object.assign({}, o);
+  o.headers = authHeaders(o.headers);
+  // 接口都是按当前账号算的，禁止浏览器/代理缓存，避免换账号后拿到上一位的旧数据
+  if (!o.method || String(o.method).toUpperCase() === 'GET') o.cache = 'no-store';
+  return fetch(p, o).then(r => {
+    // 登录态失效（非登录接口本身）：清掉本地状态并引导重新登录
+    if (r.status === 401 && !p.startsWith('/api/auth') && !authKicked){
+      authKicked = true;
+      localStorage.removeItem('nr_token');
+      resetIdentityState();
+      state.user = null;
+      state.meta = null;
+      applyPrefScope(true);
+      applyRoleUI();
+      render();
+      openAuth('登录已过期，请重新登录');
+      setTimeout(() => { authKicked = false; }, 1500);
+    }
+    return r.ok ? r.json() : r.json().then(e => Promise.reject(e));
+  });
+};
+
+/* ------- 设置存储：登录用户按设备长期记忆（localStorage）；访客只在当前会话生效（sessionStorage），
+   多个访客互不影响——后打开的访客看到的仍是默认值。
+   账号作用域：同一台设备上不同账号各存各的（prefScope = 'u<uid>'），换号后不会读到上一位的设置。 ------- */
+let prefScope = '';
+try { const _u = localStorage.getItem('nr_uid'); prefScope = _u ? 'u' + _u : ''; } catch(e){}
+function prefStore(){
+  try { return localStorage.getItem('nr_token') ? localStorage : sessionStorage; }
+  catch(e){ return localStorage; }
+}
+function prefKey(key){ return prefScope ? `${key}@${prefScope}` : key; }
+function prefGet(key, dflt){
+  try { const v = prefStore().getItem(prefKey(key)); return v === null ? dflt : v; } catch(e){ return dflt; }
+}
+function prefSet(key, val){
+  try { prefStore().setItem(prefKey(key), val); } catch(e){}
+  queuePrefsPush();   // 登录用户：改动防抖同步到账号存档，换域名/换设备也能带出来
+}
+
+/* ------- 账号级设置云同步：本机 localStorage 仍为主（快、离线可用），
+   登录后拉一次账号存档补齐缺失/更新的项，任何改动 800ms 防抖推全量快照。
+   续播位置 nr_pos_*、当日天气标记 nr_wx_day* 属设备本地状态，不参与同步。 ------- */
+let prefPushTimer = null;
+function prefSyncableKey(base){
+  if (!base || base.indexOf('nr_') !== 0) return false;
+  if (base === 'nr_token' || base === 'nr_uid' || base === 'nr_prefs_ts') return false;
+  if (base.indexOf('nr_pos_') === 0 || base.indexOf('nr_wx_day') === 0) return false;
+  return true;
+}
+function localPrefsSnapshot(){
+  const out = {};
+  try {
+    const st = localStorage;
+    for (let i = 0; i < st.length; i++){
+      const full = st.key(i);
+      if (!full || full.indexOf('nr_') !== 0) continue;
+      let base = full;
+      if (prefScope){
+        if (full.slice(-(prefScope.length + 1)) !== '@' + prefScope) continue;
+        base = full.slice(0, full.length - prefScope.length - 1);
+      }
+      if (!prefSyncableKey(base)) continue;
+      out[base] = st.getItem(full) || '';
+    }
+  } catch(e){}
+  return out;
+}
+function queuePrefsPush(){
+  if (!state.user) return;
+  clearTimeout(prefPushTimer);
+  prefPushTimer = setTimeout(pushPrefsNow, 800);
+}
+async function pushPrefsNow(){
+  clearTimeout(prefPushTimer); prefPushTimer = null;
+  if (!state.user) return;
+  const prefs = localPrefsSnapshot();
+  const ts = Date.now();
+  try {
+    await api('/api/me/prefs', {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ prefs, ts }),
+    });
+    try { localStorage.setItem('nr_prefs_ts', String(ts)); } catch(e){}
+  } catch(e){}
+}
+/* 登录/带令牌进入时调用：把账号存档里的设置带回本机 */
+async function hydratePrefs(){
+  if (!state.user) return;
+  let r;
+  try { r = await api('/api/me/prefs'); } catch(e){ return; }
+  const server = (r && r.prefs && typeof r.prefs === 'object') ? r.prefs : {};
+  const serverTs = Number((r && r.ts) || 0);
+  let localTs = 0;
+  try { localTs = Number(localStorage.getItem('nr_prefs_ts') || 0); } catch(e){}
+  if (!Object.keys(server).length){        // 账号里还没有存档（升级后首次登录）：把本机已有的推上去
+    await pushPrefsNow();
+    return;
+  }
+  if (serverTs && serverTs <= localTs) return;   // 本机这份更新，保留本机
+  // 账号存档更新（换域名登录就是走这条）：写回本机作用域键后重新应用
+  try {
+    for (const k of Object.keys(server)){
+      const v = server[k];
+      if (typeof v !== 'string' || !prefSyncableKey(k)) continue;
+      localStorage.setItem(prefKey(k), v);
+    }
+    localStorage.setItem('nr_prefs_ts', String(serverTs || Date.now()));
+  } catch(e){}
+  applyPrefScope(true);     // 背景音乐 / 睡眠暂停 / 播放顺序
+  try { loadPrefs(); } catch(e){}     // 生成设置（分类/时长/音色/源占比…）
+  try { renderSheet(); } catch(e){}
+}
+
+const state = {
+  meta: null,
+  user: null,        // 当前登录用户；null = 访客
+  sub: null,         // 订阅访问：{enabled, account} 或 {enabled:false, error}
+  guest: null,       // 未登录访客：{allowed, message, account}（服务端按 config.yaml 的 guest 段判定）
+  subscribe: false,  // 管理员：外部订阅总开关
+  podcast: false,    // 管理员：播客订阅总开关
+  episodes: [],
+  current: null,
+  chapters: [],
+  selectedProgram: null,
+  selectedCats: new Set(),
+  selectedFeeds: new Set(),
+  expandedCats: new Set(),
+  genMode: 'recent',
+  lookback: 6,
+  lbCustom: false,
+  winStart: '',
+  winEnd: '',
+  rate: '+10%',
+  targetMin: 10,     // 目标时长（分钟），0 = 未选
+  targetCustom: '',  // 自定义时长的输入值
+  sort: 'category',  // category=按分类 / date=按时间 / source=按平台
+  voice: '',         // 本期音色；空 = 服务端默认
+  auto: null,
+  autoSaving: false,
+  generating: false,
+  preparing: false,
+  // 连续播放
+  playMode: (prefGet('nr_playmode', '') === 'asc' || prefGet('nr_playmode', '') === 'desc')
+    ? prefGet('nr_playmode', '') : 'latest',   // latest / asc / desc
+  crossday: false,      // 跨日连续播放（跟随首页的正序/倒序）
+  queue: [],            // 连续播放队列
+  queueIdx: -1,
+  sleepMin: parseInt(prefGet('nr_sleep_min', '0'), 10) || 0,   // 睡眠暂停（分钟，0=关闭）
+  sleepAt: 0,           // 到点时间戳（0 = 没在倒计时）
+  sleepTimer: null,     // 每秒刷新的定时器
+  cgOpen: {},           // 设置面板分组展开状态
+  cgInit: false,
+  extLatest: false,     // 允许外部按账号调用（?user=）
+  guestAdmin: null,     // 管理员：「首页访客指向」的账号清单与当前值
+  histOpen: null,       // 往期按日期折叠：展开的日期组（Set），null = 尚未初始化
+  feedShares: {},       // 源 url → 占比%（空 = 不参考）
+  wxPlaying: false,     // 正在播「今日天气」前置音频
+  wxAfter: null,        // 天气播完后要接的正片
+  wxNow: null,          // 首页常驻天气条（/api/weather/now，开启了才有）
+  runInfo: null,        // 跑步模式：当前节目的 {km, minutes, pace_sec, pace}（非跑步节目为 null）
+  runPrevMood: '',      // 跑步节目临时切激进 BGM 前的原风格，切回普通节目时恢复
+};
+
+const dayKeyOf = s => {
+  const d = new Date(s);
+  if (!d || isNaN(d)) return '?';
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const todayKey = () => dayKeyOf(new Date());
+
+const CHECK_SVG = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#1a1206" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><path d="m5 13 4 4L19 7"/></svg>';
+const CV_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m9 6 6 6-6 6"/></svg>';
+const RATES = [
+  { label: '慢', v: '-10%' },
+  { label: '标准', v: '+0%' },
+  { label: '快一点', v: '+10%' },
+  { label: '快', v: '+20%' },
+  { label: '很快', v: '+30%' },
+];
+const LOOKBACKS = [3, 6, 8];
+const DURATIONS = [10, 20, 25];   // 预设目标时长（分钟）
+const SORT_LABELS = { category: '按分类', date: '按时间', source: '按平台' };
+const SORT_HINTS = {
+  category: '国内、国际、财经…一类一类的播，结构最清楚',
+  date: '最新的新闻排在最前面，不分分类连着播',
+  source: '同一个平台的新闻连在一起播，一段一个来源',
+};
+function sortLabel(s){ return SORT_LABELS[s] || '按分类'; }
+
+/* ---------------- 身份 ---------------- */
+function isGuest(){ return !state.user; }
+function isAdmin(){ return !!state.user && state.user.role === 'admin'; }
+
+function applyRoleUI(){
+  const b = $('#btnUser');
+  b.classList.toggle('me', !!state.user);
+  b.title = state.user ? `账号：${state.user.email}` : '登录 / 注册';
+  const admin = isAdmin();
+  $('#cgAdmin').style.display = admin ? '' : 'none';
+  $('#usersGroup').style.display = admin ? '' : 'none';
+  // 自动更新：每个登录用户各自一份设置、各自的任务（访客整个「自动化」分组隐藏）
+  $('#autoGroup').style.display = state.user ? '' : 'none';
+  $('#cgAuto').style.display = state.user ? '' : 'none';
+  // 访客没有账号可存，「仅保存」隐藏（仍可临时调整 + 保存并生成时引导登录）
+  $('#btnSavePrefs').style.display = isGuest() ? 'none' : '';
+  $('#sheet .panel').classList.toggle('guest', isGuest());
+  const gb = $('#guestBar');
+  if (gb){
+    gb.style.display = isGuest() ? '' : 'none';
+    const sp = gb.querySelector('span');
+    if (sp) sp.innerHTML = (state.guest && state.guest.allowed === false)
+      ? '访客收听未开启：登录后可收听节目、生成自己的节目'
+      : '访客模式：可收听管理员发布的节目，登录后可生成自己的节目并保存设置';
+  }
+  if (admin){
+    loadSubscribe();
+    loadPodcast();
+    loadExternalLatest();
+    loadGuest();
+    loadVersion(false);
+  } else {
+    // 不是管理员：顺手清掉上一位管理员留在页面里的用户列表/保留设置，避免换账号后残留在 DOM 里
+    const ul = $('#userList'); if (ul) ul.innerHTML = '';
+    const uc = $('#userCount'); if (uc) uc.textContent = '';
+    const rs = $('#retSeg'); if (rs) rs.innerHTML = '';
+    const rst = $('#retState'); if (rst) rst.textContent = '';
+    const ps = $('#podSeg'); if (ps) ps.innerHTML = '';
+    const gs = $('#guestSel'); if (gs) gs.innerHTML = '';
+    const gt = $('#guestState'); if (gt) gt.textContent = '';
+    state.extLatest = false;
+    state.guestAdmin = null;
+  }
+}
+
+/* 换账号 / 退出登录时把上一位账号的痕迹清干净：
+   播放器与音频、连播队列、节目列表、往期折叠状态、源占比记忆、天气条。
+   不清的话会出现「退出后还在播上一个账号的节目」「新账号列表没刷新」这类串号。 */
+function resetIdentityState(){
+  try { audio.pause(); } catch(e){}
+  try { audio.removeAttribute('src'); audio.load(); } catch(e){}
+  try { bgm.pause(); bgm.removeAttribute('src'); } catch(e){}
+  state.wxPlaying = false; state.wxAfter = null;
+  state.current = null; state.chapters = [];
+  state.queue = []; state.queueIdx = -1;
+  state.episodes = [];
+  state.histOpen = null;
+  state.feedShares = {};
+  state.generating = false; state.preparing = false;
+  state.wxNow = null;
+  state.runInfo = null;
+  renderRunStrip();
+  const p = $('#player'); if (p) p.classList.add('hide');
+  const pc = $('#pChapter'); if (pc) pc.textContent = '';
+  const pt = $('#pTime'); if (pt) pt.textContent = '0:00 / 0:00';
+  const fl = $('#fill'); if (fl) fl.style.width = '0%';
+  const sk = $('#seekRange'); if (sk) sk.value = 0;
+  updateQueueBadge();
+}
+
+/* 切换账号后重新绑定「偏好作用域」并重新读取该账号的播报设置
+   （背景音乐 / 播放顺序 / 睡眠暂停），顺便把上一位账号的睡眠倒计时清掉。 */
+function applyPrefScope(force){
+  const want = (state.user && state.user.uid) ? ('u' + state.user.uid) : '';
+  if (!force && prefScope === want) return;
+  prefScope = want;
+  try {
+    if (state.user && state.user.uid) localStorage.setItem('nr_uid', String(state.user.uid));
+    else localStorage.removeItem('nr_uid');
+  } catch(e){}
+  // 播放顺序
+  const pm = prefGet('nr_playmode', '');
+  state.playMode = (pm === 'asc' || pm === 'desc') ? pm : 'latest';
+  // 睡眠暂停
+  state.sleepMin = parseInt(prefGet('nr_sleep_min', '0'), 10) || 0;
+  if (state.sleepAt) sleepClear();
+  // 背景音乐
+  const mood = prefGet('nr_bgm_mood', '');
+  state.bgmMood = BGM_TRACKS[mood] ? mood : (prefGet('nr_bgm', '') === '1' ? 'soft' : '');
+  state.bgmVol = Math.min(100, Math.max(0, parseInt(prefGet('nr_bgm_vol', '15'), 10) || 15));
+  try { bgmLastTrack = ''; bgm.pause(); bgm.removeAttribute('src'); bgmPick(); bgmApplyVol(); applyBgm(); } catch(e){}
+  renderBgm();
+  renderSleepSeg();
+  renderSleepBadge();
+  render();
+}
+
+/* 「首页访客指向」：未登录打开首页时听谁的节目（默认管理员自己） */
+async function loadGuest(){
+  try { state.guestAdmin = await api('/api/guest'); }
+  catch(e){ state.guestAdmin = null; }
+  renderGuestSel();
+}
+function renderGuestSel(){
+  const sel = $('#guestSel');
+  if (!sel || !isAdmin()) return;
+  const d = state.guestAdmin || {};
+  const rows = d.accounts || [];
+  const cur = d.account || '';
+  sel.innerHTML = rows.map(a => {
+    const tags = [];
+    if (a.role === 'admin') tags.push('管理员');
+    if (a.disabled) tags.push('已禁用');
+    else if (!a.sub_enabled) tags.push('速听分享未开');
+    const suffix = tags.length ? `（${tags.join(' · ')}）` : '';
+    return `<option value="${escapeHtml(a.email)}">${escapeHtml(a.email)}${suffix}</option>`;
+  }).join('');
+  if (cur && rows.some(a => a.email === cur)) sel.value = cur;
+  sel.onchange = async () => {
+    const v = sel.value;
+    sel.disabled = true;
+    try {
+      state.guestAdmin = await api('/api/guest', {
+        method: 'POST', headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ account: v }),
+      });
+      toast('首页访客已指向 ' + v, 2400);
+    } catch(e){
+      toast('保存失败：' + (e.detail || e.message || ''), 3200);
+    } finally {
+      sel.disabled = false;
+      renderGuestSel();
+    }
+  };
+  const st = $('#guestState');
+  if (st){
+    const acc = rows.find(a => a.email === cur);
+    if (d.allowed === false){
+      st.innerHTML = `<b style="color:#e0703c">访客需登录</b>`;
+      st.title = d.message || '';
+    } else if (acc && !acc.sub_enabled){
+      st.textContent = '该账号速听分享未开';
+      st.title = '';
+    } else {
+      st.textContent = '';
+      st.title = '';
+    }
+  }
+}
+
+/* ---------------- 项目主页入口（首页底部，config.yaml 的 repo_url） ---------------- */
+function applyFootRepo(){
+  const wrap = $('#siteFoot'), a = $('#footRepo'), t = $('#footRepoText');
+  if (!wrap || !a) return;
+  const url = (state.meta && state.meta.repo_url) || '';
+  if (!url){ wrap.style.display = 'none'; return; }
+  a.href = url;
+  let label = '项目主页';
+  const m = url.match(/github\.com\/([^/]+)\/([^/?#]+)/i);
+  if (m) label = `GitHub · ${m[1]}/${m[2].replace(/\.git$/i, '')}`;
+  if (t) t.textContent = label;
+  wrap.style.display = '';
+}
+
+/* ---------------- 版本更新（管理员 · 全局管理） ---------------- */
+async function loadVersion(force){
+  if (!isAdmin()) return;
+  const hint = $('#verHint'), badge = $('#verBadge'), btn = $('#btnCheckVer');
+  if (badge){ badge.textContent = ''; badge.style.color = ''; }
+  if (hint) hint.textContent = '正在检查…';
+  if (btn) btn.disabled = true;
+  try {
+    renderVersion(await api('/api/version' + (force ? '?force=1' : '')));
+  } catch(e){
+    if (btn) btn.disabled = false;
+    const cur = (state.meta && state.meta.version) || '';
+    if (badge) badge.textContent = '未检查';
+    if (hint) hint.innerHTML = '检查失败：' + escapeHtml(e.detail || e.message || '未知错误')
+      + (cur ? `<br>当前版本 v${escapeHtml(cur)}` : '');
+  }
+}
+function renderVersion(d){
+  const hint = $('#verHint'), badge = $('#verBadge'), btn = $('#btnCheckVer');
+  if (btn) btn.disabled = false;
+  const cur = d.current || (state.meta && state.meta.version) || '';
+  if (d.error){
+    if (badge){ badge.textContent = '未检查'; badge.style.color = ''; }
+    if (hint) hint.innerHTML = escapeHtml(d.error) + (cur ? `<br>当前版本 v${escapeHtml(cur)}` : '');
+    return;
+  }
+  if (d.has_update){
+    if (badge){ badge.textContent = '有新版本'; badge.style.color = '#ffb454'; }
+    if (hint){
+      hint.innerHTML = `当前 v${escapeHtml(cur)}，最新 <b style="color:var(--accent)">v${escapeHtml(d.latest || '')}</b>`;
+      if (d.url){
+        const a = document.createElement('a');
+        a.href = d.url; a.target = '_blank'; a.rel = 'noopener';
+        a.textContent = '　查看更新 ›';
+        a.style.color = 'var(--accent)';
+        hint.appendChild(a);
+      }
+    }
+  } else {
+    if (badge){ badge.textContent = '已是最新'; badge.style.color = ''; }
+    if (hint) hint.textContent = `当前 v${cur}` + (d.latest ? ` · 仓库最新 v${d.latest}` : '');
+  }
+}
+
+/* 「允许外部订阅」（/s/令牌）总开关 */
+async function loadSubscribe(){
+  try {
+    const r = await api('/api/subscribe');
+    state.subscribe = !!r.enabled;
+  } catch(e){ state.subscribe = false; }
+  renderSubSeg();
+}
+function renderSubSeg(){
+  const seg = $('#subSeg');
+  if (!seg || !isAdmin()) return;
+  seg.innerHTML = [['0', '关闭'], ['1', '开启']].map(([v, t]) =>
+    `<button data-sub="${v}" class="${(state.subscribe ? '1' : '0') === v ? 'on' : ''}">${t}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = async () => {
+      const on = b.dataset.sub === '1';
+      try {
+        const r = await api('/api/subscribe', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ enabled: on }),
+        });
+        state.subscribe = !!r.enabled;
+        renderSubSeg();
+        toast(state.subscribe ? '已允许速听分享' : '已关闭速听分享', 2400);
+      } catch(e){
+        toast('保存失败：' + (e.detail || e.message || ''), 3200);
+      }
+    };
+  });
+}
+
+/* 「允许播客订阅」（/feed/令牌.xml）总开关 */
+async function loadPodcast(){
+  try {
+    const r = await api('/api/podcast');
+    state.podcast = !!r.enabled;
+  } catch(e){ state.podcast = false; }
+  renderPodSeg();
+}
+function renderPodSeg(){
+  const seg = $('#podSeg');
+  if (!seg || !isAdmin()) return;
+  seg.innerHTML = [['0', '关闭'], ['1', '开启']].map(([v, t]) =>
+    `<button data-pod="${v}" class="${(state.podcast ? '1' : '0') === v ? 'on' : ''}">${t}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = async () => {
+      const on = b.dataset.pod === '1';
+      try {
+        const r = await api('/api/podcast', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ enabled: on }),
+        });
+        state.podcast = !!r.enabled;
+        renderPodSeg();
+        toast(state.podcast ? '已允许播客订阅' : '已关闭播客订阅', 2400);
+      } catch(e){
+        toast('保存失败：' + (e.detail || e.message || ''), 3200);
+      }
+    };
+  });
+}
+
+/* 「允许外部按账号调用」开关（?user=） */
+async function loadExternalLatest(){
+  try {
+    const r = await api('/api/external-latest');
+    state.extLatest = !!r.enabled;
+  } catch(e){ state.extLatest = false; }
+  renderExtSeg();
+}
+function renderExtSeg(){
+  const seg = $('#extSeg');
+  if (!seg || !isAdmin()) return;
+  seg.innerHTML = [['0', '关闭'], ['1', '开启']].map(([v, t]) =>
+    `<button data-ext="${v}" class="${(state.extLatest ? '1' : '0') === v ? 'on' : ''}">${t}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = async () => {
+      const on = b.dataset.ext === '1';
+      try {
+        const r = await api('/api/external-latest', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ enabled: on }),
+        });
+        state.extLatest = !!r.enabled;
+        renderExtSeg();
+        toast(state.extLatest ? '已允许接口调用' : '已关闭接口调用', 2400);
+      } catch(e){
+        toast('保存失败：' + (e.detail || e.message || ''), 3200);
+      }
+    };
+  });
+}
+
+/* 设置面板：分组折叠 */
+function bindCollapse(){
+  const box = $('#expandAll');
+  if (!box) return;
+  if (!state.cgInit){
+    const all = localStorage.getItem('nr_expand_all') === '1';
+    document.querySelectorAll('.cgroup').forEach(g => { state.cgOpen[g.dataset.cg] = all; });
+    state.cgInit = true;
+  }
+  box.checked = localStorage.getItem('nr_expand_all') === '1';
+  document.querySelectorAll('.cgroup').forEach(g => g.classList.toggle('open', !!state.cgOpen[g.dataset.cg]));
+  box.onchange = () => {
+    localStorage.setItem('nr_expand_all', box.checked ? '1' : '0');
+    document.querySelectorAll('.cgroup').forEach(g => {
+      state.cgOpen[g.dataset.cg] = box.checked;
+      g.classList.toggle('open', box.checked);
+    });
+  };
+  document.querySelectorAll('.cghead').forEach(h => {
+    h.onclick = () => {
+      const g = h.parentElement;
+      state.cgOpen[g.dataset.cg] = !state.cgOpen[g.dataset.cg];
+      g.classList.toggle('open', state.cgOpen[g.dataset.cg]);
+    };
+  });
+}
+
+/** 与后端 estimate_items 同一套估算：按时长折算条数，宁可少不要超 */
+function estimateItems(minutes, rate){
+  const pct = parseFloat(String(rate || '+0%').replace(/[+%]/g, '')) || 0;
+  const speed = Math.max(0.6, 1 + pct / 100);
+  const secPerItem = 115 / (5.2 * speed) + 1.5;
+  return Math.max(4, Math.min(80, Math.round((minutes * 60 - 30) / secPerItem)));
+}
+function effectiveTargetMin(){
+  if (state.targetMin === 'custom'){
+    const v = parseFloat(state.targetCustom);
+    return (v >= 2 && v <= 120) ? v : null;
+  }
+  return state.targetMin || null;
+}
+
+const audio = new Audio();
+audio.preload = 'metadata';
+let seeking = false;
+let lastEp = null;
+
+/* ---------------- 工具 ---------------- */
+function fmtTime(s){
+  if (!isFinite(s) || s < 0) s = 0;
+  const m = Math.floor(s / 60), sec = Math.floor(s % 60);
+  return `${m}:${String(sec).padStart(2,'0')}`;
+}
+function fmtDate(iso){
+  if (!iso) return '';
+  const d = new Date(iso);
+  const today = new Date();
+  const isToday = d.toDateString() === today.toDateString();
+  const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  if (isToday) return `今天 ${hm}`;
+  return `${d.getMonth()+1}月${d.getDate()}日 ${hm}`;
+}
+let toastTimer;
+function toast(msg, ms=2600){
+  const el = $('#toast');
+  el.textContent = msg; el.classList.add('on');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('on'), ms);
+}
+/* 复制到剪贴板：优先 Clipboard API（需 https/localhost），
+   局域网 http 下 API 不存在，退回隐藏 textarea + execCommand，再不行就直接把内容亮在提示里 */
+function copyText(txt, okMsg, showMsg){
+  const done = () => toast(okMsg || '已复制', 2000);
+  const fallback = () => {
+    let ok = false;
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.style.cssText = 'position:fixed;top:0;left:0;opacity:0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+    } catch(e){ ok = false; }
+    if (ok) done();
+    else toast((showMsg || '内容：') + txt, 4200);
+  };
+  if (navigator.clipboard && window.isSecureContext){
+    navigator.clipboard.writeText(txt).then(done).catch(fallback);
+  } else {
+    fallback();
+  }
+}
+function fmtDur(s){
+  if (!s) return '--';
+  const m = Math.round(s / 60);
+  return `${m} 分钟`;
+}
+
+/* ---------------- 渲染 ---------------- */
+/** 节目名以当前配置为准（改过名字后，往期也显示新叫法） */
+function programName(ep){
+  const p = state.meta?.programs?.find(x => x.id === ep.program_id);
+  return p?.name || (ep.script || {}).program_name || '节目';
+}
+
+function renderHero(ep){
+  const s = ep.script || {};
+  const segs = s.segments || [];
+  const items = segs.filter(x => x.type === 'item');
+
+  const bars = Array.from({length: 42}, (_, i) => {
+    const h = 22 + 78 * Math.abs(Math.sin(i * 0.55) * Math.cos(i * 0.21));
+    return `<i style="height:${h.toFixed(0)}%;animation-delay:${(i*0.045).toFixed(2)}s"></i>`;
+  }).join('');
+
+  return `
+    <section class="hero">
+      <div class="eyebrow">
+        <span class="pill">${programName(ep)}</span>
+        ${ep.seq ? `<span class="pill">第 ${ep.seq} 期</span>` : ''}
+        ${ep.script?.run ? `<span class="pill runpill" title="跑步模式生成">🏃 ${kmText(ep.script.run.km)} km</span>` : ''}
+        ${state.sub && state.sub.enabled ? `<span class="pill subpill" title="外部订阅：正在收听 ${escapeHtml(state.sub.account || '')} 的节目">📡 订阅</span>` : ''}
+        <span>${fmtDate(ep.created_at)} 发布</span>
+        ${state.wxNow && state.wxNow.enabled && state.wxNow.temp != null ? wxPillHtml() : ''}
+      </div>
+      <h1>${ep.title || '要闻速听'}</h1>
+      <div class="meta">
+        <span><b>${ep.item_count || items.length}</b> 条要闻</span>
+        <span><b>${fmtDur(ep.duration)}</b> 时长</span>
+        <span>${s.chars || 0} 字</span>
+      </div>
+      <div class="wave" id="wave">${bars}</div>
+      <button class="bigplay" id="heroPlay" data-id="${ep.id}">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+        <span>立即收听</span>
+      </button>
+      <div class="timeline">	  
+      <div class="seg playmodes" id="playModes">${[
+        ['latest', '最新播放'],
+        ['asc', '正序播放'],
+        ['desc', '倒序播放'],
+      ].map(([v, t]) => `<button data-pm="${v}" class="${state.playMode === v ? 'on' : ''}">${t}</button>`).join('')}</div>
+      </div>	  
+    </section>`;
+}
+
+function renderItems(ep){
+  const s = ep.script || {};
+  const segs = s.segments || [];
+  const chapters = s.chapters || [];
+  const chByIndex = {};
+  chapters.forEach(c => chByIndex[c.index] = c);
+  const items = [];
+  let n = 0;
+  segs.forEach((seg, i) => {
+    if (seg.type === 'weather'){
+      const ch = chByIndex[i];
+      items.push(`
+        <div class="item" data-start="${ch ? ch.start : ''}" data-idx="${i}">
+          <div class="idx">☀</div>
+          <div class="body">
+            <div class="tag"><span>今日天气</span></div>
+            <p>${escapeHtml(seg.text)}</p>
+          </div>
+          <div class="tm">${ch ? fmtTime(ch.start) : ''}</div>
+        </div>`);
+    }
+    if (seg.type === 'item'){
+      n++;
+      const ch = chByIndex[i];
+      items.push(`
+        <div class="item" data-start="${ch ? ch.start : ''}" data-idx="${i}">
+          <div class="idx">${String(n).padStart(2,'0')}</div>
+          <div class="body">
+            <div class="tag"><span>${seg.category ? catLabel(seg.category) : ''}</span><span class="src">${seg.source || ''}</span></div>
+            <h3>${escapeHtml(seg.title || '')}</h3>
+            <p>${escapeHtml(stripLead(seg.text))}</p>
+          </div>
+          <div class="tm">${ch ? fmtTime(ch.start) : ''}${seg.link ? `<button class="readlnk" data-link="${escapeHtml(seg.link)}" title="新建网页阅读原文">原文 ↗</button>` : ''}</div>
+        </div>`);
+    }
+  });
+  return `<div class="sec-title">本期节目 <span class="n">${n} 条</span></div>${items.join('')}`;
+}
+
+function stripLead(t){
+  // 兼容两代口播格式：旧版「来自XX。」、新版「第一条，」编号前缀
+  return (t || '')
+    .replace(/^来自[^。]{1,30}。/, '')
+    .replace(/^第[一二三四五六七八九十百零\d]+条，?/, '');
+}
+function escapeHtml(s){
+  return (s || '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+/* 首页快速清空自己的往期节目：两次点击确认，防误触 */
+let clearMineTimer = null;
+async function clearMineClicked(){
+  if (isGuest()){ openAuth('登录后才能清除自己的节目'); return; }
+  const btn = $('#btnClearMine');
+  if (!btn) return;
+  if (btn.dataset.armed !== '1'){
+    btn.dataset.armed = '1';
+    btn.textContent = '确定清空？';
+    clearTimeout(clearMineTimer);
+    clearMineTimer = setTimeout(() => {
+      if (btn.isConnected){ btn.dataset.armed = ''; btn.textContent = '清空我的'; }
+    }, 6000);
+    return;
+  }
+  btn.dataset.armed = '';
+  btn.disabled = true;
+  btn.textContent = '清空中…';
+  try {
+    const r = await api('/api/episodes/clear/mine', { method: 'POST' });
+    toast(`已清除自己的 ${r.removed} 期往期节目`);
+    state.current = null;
+    await loadEpisodes();
+  } catch(e){
+    toast('清除失败：' + (e.detail || e.message || ''), 3600);
+    await render();
+  }
+}
+function catLabel(k){
+  const c = state.meta?.categories?.find(x => x.key === k);
+  return c ? c.label : k;
+}
+
+function histGroups(others){
+  /* 按本地日期分组，保持原有（最新在前）顺序 */
+  const groups = [];
+  const idx = {};
+  others.forEach(e => {
+    const d = new Date(e.created_at);
+    const k = dayKeyOf(e.created_at);
+    if (idx[k] === undefined){
+      idx[k] = groups.length;
+      groups.push({ key: k, label: isNaN(d) ? '未知日期' : `${d.getMonth() + 1}月${d.getDate()}日`, items: [] });
+    }
+    groups[idx[k]].items.push(e);
+  });
+  return groups;
+}
+
+function renderHistory(){
+  const others = state.episodes.filter(e => !state.current || e.id !== state.current.id);
+  if (!others.length) return '';
+  const guest = isGuest();
+  const groups = histGroups(others);
+  if (!state.histOpen) state.histOpen = new Set([groups[0].key]);   // 默认展开最近一天
+  return `<div class="history">
+    <div class="sec-title">往期节目 <span class="n">${others.length}</span>
+      <button class="clearmine" id="btnClearMine" data-clearmine="1" ${guest ? 'disabled title="登录后才能清除自己的节目"' : 'title="清空我账号下的全部往期节目（不可恢复）"'}>${guest ? '清空' : '清空我的'}</button>
+    </div>
+    ${groups.map(g => {
+      const open = state.histOpen.has(g.key);
+      return `<div class="hdaygrp">
+        <div class="hday ${open ? 'open' : ''}" data-day="${g.key}">
+          <span class="dlabel">${g.label}</span>
+          <span class="dn">${g.items.length} 期</span>
+          <span class="chev">${CV_SVG}</span>
+        </div>
+        <div class="hdaybody ${open ? 'open' : ''}">
+          ${g.items.map(e => `
+            <div class="hrow" data-open="${e.id}">
+              <div class="play-s">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg>
+              </div>
+              <div class="hb">
+                <div class="ht">
+                  <span class="ttl">${escapeHtml(e.title)}</span>
+                  ${e.is_run ? `<span class="hrun" title="跑步模式生成">🏃 ${e.run_km ? kmText(e.run_km) + ' km' : '跑步'}</span>` : ''}
+                </div>
+                <div class="hm">第 ${e.seq || '—'} 期 · ${fmtDate(e.created_at)} · ${fmtDur(e.duration)} · ${e.item_count} 条</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`;
+    }).join('')}
+  </div>`;
+}
+
+function render(){
+  const c = $('#content');
+  if (!state.current){
+    if (state.preparing){
+      c.innerHTML = `<div class="empty"><span class="spinner"></span>
+        <h3>正在准备今日要闻</h3>
+        <p>抓取最新新闻并合成语音<br>大约需要 1～2 分钟，先别关页面</p></div>`;
+      return;
+    }
+    // 访客收听被关闭（config.yaml 的 guest.enabled = false，或速听分享没开）：提示需登录
+    if (state.guest && state.guest.allowed === false){
+      c.innerHTML = `
+      <div class="empty">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="var(--dim2)" stroke-width="1.4" stroke-linecap="round">
+          <rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>
+        </svg>
+        <h3>需要登录后收听</h3>
+        <p>${escapeHtml(state.guest.message || '访客收听未开启，请登录后收听')}</p>
+        <button class="btn-ghost" onclick="openAuth()">登录 / 注册</button>
+      </div>`;
+      return;
+    }
+    c.innerHTML = `
+      <div class="empty">
+        <svg width="46" height="46" viewBox="0 0 24 24" fill="none" stroke="var(--dim2)" stroke-width="1.4" stroke-linecap="round">
+          <path d="M3 12a9 9 0 0 1 9-9"/><path d="M3 5a16 16 0 0 1 16 16" opacity=".5"/>
+          <circle cx="4.5" cy="18.5" r="1.6" fill="var(--dim2)" stroke="none"/>
+        </svg>
+        <h3>还没有节目</h3>
+        <p>点右上角的齿轮，生成最近的要闻<br>生成第一期带语音的要闻</p>
+        <button class="btn-ghost" onclick="openSheet()">立即生成</button>
+      </div>`;
+    return;
+  }
+  c.innerHTML = renderHero(state.current) + renderItems(state.current) + renderHistory();
+  bindContent();
+}
+
+function bindContent(){
+  const hp = $('#heroPlay');
+  if (hp) hp.onclick = () => {
+    if (!audio.src) { playFromHero(); return; }
+    togglePlay();   // 已在播：按钮就是暂停/继续
+  };
+  document.querySelectorAll('#playModes button').forEach(b => {
+    b.onclick = () => {
+      state.playMode = b.dataset.pm;
+      prefSet('nr_playmode', state.playMode);
+      render();
+      if (audio.src && state.queue.length) toast('下次点「立即收听」按新模式排队列', 2200);
+    };
+  });
+  document.querySelectorAll('.item').forEach(el => {
+    el.onclick = () => {
+      const st = parseFloat(el.dataset.start);
+      if (isNaN(st)) return;
+      if (!audio.src) { loadEpisode(state.current, false).then(() => seekTo(st)); }
+      else { seekTo(st); }
+    };
+  });
+  /* 每条新闻的「原文 ↗」按钮：新建网页阅读，不触发跳播进度 */
+  document.querySelectorAll('.item .readlnk').forEach(b => {
+    b.onclick = (e) => {
+      e.stopPropagation();
+      const link = b.dataset.link;
+      if (link) window.open(link, '_blank', 'noopener');
+      else toast('这条新闻没有原文链接', 2000);
+    };
+  });
+  document.querySelectorAll('[data-open]').forEach(el => {
+    el.onclick = () => openEpisode(parseInt(el.dataset.open, 10), false);
+  });
+  document.querySelectorAll('.hday').forEach(el => {
+    el.onclick = () => {
+      const k = el.dataset.day;
+      if (!state.histOpen) state.histOpen = new Set();
+      state.histOpen.has(k) ? state.histOpen.delete(k) : state.histOpen.add(k);
+      render();
+    };
+  });
+  document.querySelectorAll('[data-clearmine]').forEach(el => {
+    el.onclick = clearMineClicked;
+  });
+  document.querySelectorAll('[data-open-gen]').forEach(el => {
+    el.onclick = () => openSheet();
+  });
+}
+
+function collectShares(feeds){
+  /* 从占比表里挑出本次勾选的源；空 = 不传，服务端按不参考处理 */
+  const shares = {};
+  (feeds || []).forEach(u => {
+    const v = parseInt(state.feedShares[u], 10);
+    if (v >= 1 && v <= 100) shares[u] = v;
+  });
+  return shares;
+}
+
+/* ---------------- 连续播放 ---------------- */
+async function buildQueue(){
+  /* 三种播放模式：
+     最新播放 latest = 只播最新生成的那一期（队列里就这一期）
+     正序播放 asc    = 当日第 1 期放最前 → 依次播到当日最新一期
+     倒序播放 desc   = 当日最新一期放最前 → 倒着播到当日第 1 期
+     开了跨日连续播放：当日播完，按同样的规则继续播更早的日期（前一天、前天…） */
+  if (!state.current) return [];
+  let eps = (state.episodes || []).filter(e => e.program_id === state.current.program_id);
+  if (state.crossday || state.playMode === 'latest'){
+    try {
+      const all = await api('/api/episodes?limit=300');
+      eps = all.filter(e => e.program_id === state.current.program_id);
+    } catch(e){}
+  }
+  eps = eps.slice().sort((x, y) => y.id - x.id);              // 最新期在前
+  if (state.playMode === 'latest') return [eps[0] || state.current];
+
+  const groups = {};
+  eps.forEach(e => {
+    const k = dayKeyOf(e.created_at);
+    (groups[k] = groups[k] || []).push(e);
+  });
+  Object.values(groups).forEach(a => a.sort((x, y) => x.id - y.id));   // 组内按时间正序
+  const days = Object.keys(groups).sort().reverse();   // 今天在最前，然后往前推
+  const maxDays = state.crossday ? days.length : 1;
+  let list = [];
+  for (const k of days.slice(0, maxDays)){
+    list.push(...(state.playMode === 'asc' ? groups[k] : groups[k].slice().reverse()));
+  }
+  if (!list.some(e => e.id === state.current.id)) list.unshift(state.current);  // 兜底：当前这期一定在
+  return list;
+}
+
+async function playFromHero(){
+  state.queue = await buildQueue();
+  state.queueIdx = 0;
+  await playFromQueue();
+}
+
+async function playFromQueue(){
+  const ep = state.queue && state.queue[state.queueIdx];
+  if (!ep) return;
+  updateQueueBadge();
+  if (state.current && ep.id === state.current.id){
+    await loadEpisode(ep, true);
+  } else {
+    await openEpisode(ep.id, true);
+    updateQueueBadge();
+  }
+}
+
+function updateQueueBadge(){
+  const el = $('#pQueue');
+  if (!el) return;
+  const q = state.queue || [];
+  el.textContent = (q.length > 1 && state.queueIdx >= 0)
+    ? `连续 ${state.queueIdx + 1}/${q.length}` : '';
+}
+
+function queueNext(){
+  const q = state.queue || [];
+  if (q.length > 1 && state.queueIdx >= 0 && state.queueIdx < q.length - 1){
+    state.queueIdx++;
+    const nxt = q[state.queueIdx];
+    // 跨日连播：接续到了新的日期组，自动展开它（展开的是「接下来要播的」那组，方便看到后面的安排）
+    if (state.crossday && q[state.queueIdx + 1]){
+      const nk = dayKeyOf(q[state.queueIdx + 1].created_at);
+      if (!state.histOpen) state.histOpen = new Set();
+      if (!state.histOpen.has(nk)){
+        state.histOpen.add(nk);
+        render();
+      }
+    }
+    toast(`连续播放 ${state.queueIdx + 1}/${q.length}：「${(nxt.title || '').slice(0, 16)}」`, 2400);
+    playFromQueue();
+    return true;
+  }
+  state.queue = []; state.queueIdx = -1;
+  updateQueueBadge();
+  return false;
+}
+
+/* ---------------- 数据 ---------------- */
+async function loadMeta(){
+  state.meta = await api('/api/meta');
+  state.user = state.meta.user || null;
+  state.sub = state.meta.sub || null;   // 订阅访问时：{enabled, account} 或 {enabled:false, error}
+  state.guest = state.meta.guest || null;   // 未登录访客是否能听（config.yaml 的 guest 段 + 速听分享开关）
+  state.auto = state.meta.auto || { enabled: false, interval_hours: 6, intervals: [1,2,3,6,12,24] };
+  applyPrefScope();   // 账号变了就重新读该账号的播报偏好（背景音乐/播放顺序/睡眠暂停）
+  if (state.meta.app_name){
+    document.title = state.meta.app_name;
+    const an = $('#appName');
+    if (an) an.firstChild.textContent = state.meta.app_name;
+  }
+  applyRoleUI();
+  const vl = $('#verLine');
+  if (vl && state.meta.version) vl.textContent = `服务端 v${state.meta.version}`;
+  applyFootRepo();
+  const bcv = $('#btnCheckVer');
+  if (bcv) bcv.onclick = () => loadVersion(true);
+  const sel = $('#cfCat');
+  if (sel){
+    const cur = sel.value;
+    sel.innerHTML = state.meta.categories.map(c => `<option value="${c.key}">${c.label}</option>`).join('');
+    if (cur && state.meta.categories.some(c => c.key === cur)) sel.value = cur;
+  }
+  updateClock();
+  state.selectedProgram = state.meta.programs[0];
+  resetGenState(state.selectedProgram, null);
+  renderSheet();
+  loadWx();
+}
+
+/* ---------------- 今日天气（每账号设置，默认关闭） ---------------- */
+async function loadWx(){
+  const group = $('#wxGroup');
+  if (!group) return;
+  if (!state.user){ group.style.display = 'none'; return; }
+  group.style.display = '';
+  try { renderWx(await api('/api/weather')); }
+  catch(e){ renderWx({ enabled: false }); }
+}
+
+/* 首页常驻天气条：开启了天气就一直显示在节目名旁边 */
+function wxPillHtml(){
+  const w = state.wxNow || {};
+  return `<span class="wxline" id="wxNowLine"><span class="pill" id="wxNowPill" title="今日天气（首页常驻显示）">☀ ${escapeHtml(w.place || '')} ${Math.round(w.temp)}° ${escapeHtml(w.desc || '')}</span></span>`;
+}
+async function loadWxNow(){
+  // 订阅访问按访客处理：不显示账号的天气 pill
+  if (!state.user || SUB_TOKEN){ state.wxNow = null; return; }
+  try { state.wxNow = await api('/api/weather/now'); }
+  catch(e){ return; }
+  // 首页已渲染就地把 pill 补上/更新，不打断播放
+  const eyebrow = document.querySelector('.hero .eyebrow');
+  if (!eyebrow) return;
+  const old = $('#wxNowLine') || $('#wxNowPill');
+  if (state.wxNow.enabled && state.wxNow.temp != null){
+    if (old) old.outerHTML = wxPillHtml();
+    else eyebrow.insertAdjacentHTML('beforeend', wxPillHtml());  // .wxline 独占一行、pill 自适应内容宽度
+  } else if (old){
+    old.remove();
+  }
+}
+
+function renderWx(w){
+  state.wx = w || { enabled: false };
+  const on = !!state.wx.enabled;
+  $('#wxState').innerHTML = on
+    ? `<span style="color:var(--accent)">${escapeHtml(state.wx.place || '已开启')}</span>`
+    : '未开启';
+  const seg = $('#wxSeg');
+  seg.innerHTML =
+    `<div class="chip ${!on ? 'on' : ''}" data-wx="0">关闭</div>` +
+    `<div class="chip ${on ? 'on' : ''}" data-wx="1">开启</div>`;
+  seg.querySelectorAll('.chip').forEach(el => {
+    el.onclick = async () => {
+      const enabled = el.dataset.wx === '1';
+      try { renderWx(await api('/api/weather', {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ enabled }),
+      })); loadWxNow(); }
+      catch(e){ toast(e.detail || '设置失败', 3600); }
+    };
+  });
+  $('#wxBox').style.display = '';
+  $('#wxResults').innerHTML = '';
+  $('#wxHint').innerHTML = on
+    ? (state.wx.place
+        ? `当前地区：<b>${escapeHtml(state.wx.place)}</b> · 首页常驻显示天气 · 当日首次收听时先播一段天气（Open-Meteo 数据）`
+        : `已开启 · 首页常驻显示天气 · 当日首次收听时先播一段天气（Open-Meteo 数据）`)
+    : '先选好地区再开启即可；「使用当前位置」优先用浏览器定位（HTTPS 下可用），被拒时按你当前网络的 IP 城市定位，不会持续跟踪';
+}
+
+$('#wxSave').onclick = async () => {
+  const q = $('#wxPlace').value.trim();
+  if (!q){ toast('请填写地区名'); return; }
+  const btn = $('#wxSave');
+  btn.disabled = true; btn.textContent = '搜索中…';
+  try {
+    const r = await api('/api/weather/search?q=' + encodeURIComponent(q));
+    const rs = r.results || [];
+    if (!rs.length){ toast(`找不到「${q}」，试试加上省或市名`); return; }
+    if (rs.length === 1){ await pickPlace(rs[0]); return; }
+    // 多个同名地区让用户挑一个
+    $('#wxResults').innerHTML = rs.map((x, i) =>
+      `<div class="chip" data-i="${i}">${escapeHtml(x.label)}</div>`).join('');
+    $('#wxResults').querySelectorAll('.chip').forEach(el => {
+      el.onclick = () => pickPlace(rs[parseInt(el.dataset.i, 10)]);
+    });
+    $('#wxHint').innerHTML = `<span style="color:var(--accent)">找到 ${rs.length} 个同名地区，点选一个</span>`;
+  } catch(e){
+    toast('搜索失败：' + (e.detail || ''), 3600);
+  } finally {
+    btn.disabled = false; btn.textContent = '搜索并保存';
+  }
+};
+
+async function pickPlace(x){
+  try {
+    renderWx(await api('/api/weather', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ enabled: true, place: x.label, lat: x.lat, lon: x.lon }),
+    }));
+    loadWxNow();
+    toast(`天气地区已设为 ${x.label}`, 3000);
+  } catch(e){ toast(e.detail || '保存失败', 3600); }
+}
+
+/* 按「访问端」IP 粗定位：浏览器直接问公开 IP 库（拿的是打开页面这台设备的公网 IP，
+   不是服务器出口 IP），服务端不参与。多源依次尝试，都失败返回 null。 */
+async function ipLocate(){
+  const sources = [
+    // api.ip.sb：HTTPS + CORS，字段 latitude/longitude
+    { url: 'https://api.ip.sb/geoip',
+      pick: d => d && d.latitude != null ? { lat: d.latitude, lon: d.longitude, city: d.city } : null },
+    // ipinfo.io：HTTPS + CORS，loc 形如 "22.27,114.17"
+    { url: 'https://ipinfo.io/json',
+      pick: d => {
+        if (!d || !d.loc) return null;
+        const [a, b] = String(d.loc).split(',');
+        return { lat: parseFloat(a), lon: parseFloat(b), city: d.city };
+      } },
+    // ipwho.is：HTTPS + CORS
+    { url: 'https://ipwho.is/',
+      pick: d => d && d.success !== false && d.latitude != null ? { lat: d.latitude, lon: d.longitude, city: d.city } : null },
+    { url: 'https://ipapi.co/json/',
+      pick: d => d && !d.error && d.latitude != null ? { lat: d.latitude, lon: d.longitude, city: d.city || d.region } : null },
+    // ip-api.com 仅 HTTP（HTTPS 页面下会被当混合内容拦掉，失败就跳过），但城市名是中文
+    { url: 'http://ip-api.com/json/?lang=zh&fields=status,city,lat,lon',
+      pick: d => d && d.status === 'success' ? { lat: d.lat, lon: d.lon, city: d.city } : null },
+  ];
+  for (const s of sources){
+    try {
+      const ac = new AbortController();
+      const timer = setTimeout(() => ac.abort(), 4000);
+      let r;
+      try { r = await fetch(s.url, { cache: 'no-store', signal: ac.signal }); }
+      finally { clearTimeout(timer); }
+      if (!r.ok) continue;
+      const v = s.pick(await r.json());
+      if (v && v.lat != null && v.lon != null) return v;
+    } catch(e){ /* 换下一个源 */ }
+  }
+  return null;
+}
+
+/* 用坐标保存天气设置（place 由服务端反解，反解失败用 fallbackName 兜底） */
+async function saveWxByCoords(lat, lon, fallbackName){
+  renderWx(await api('/api/weather', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ enabled: true, lat, lon, name: fallbackName || null }),
+  }));
+  loadWxNow();
+}
+
+$('#wxLocate').onclick = () => {
+  if (!navigator.geolocation){ toast('当前浏览器不支持定位'); return; }
+  toast('正在获取位置…', 2000);
+  navigator.geolocation.getCurrentPosition(async pos => {
+    try {
+      await saveWxByCoords(pos.coords.latitude, pos.coords.longitude, '');
+      toast('已使用当前位置', 3000);
+    } catch(e){ toast(e.detail || '定位保存失败', 3600); }
+  }, async err => {
+    // Chrome 在 HTTP（非 localhost）页面直接禁用 geolocation，错误码 1 最常见
+    const why = err && err.code === 1
+      ? '浏览器拒绝了定位（HTTP 页面下 Chrome 会禁用，需 HTTPS 或 localhost）'
+      : (err && err.message || '请检查浏览器定位权限');
+    toast('浏览器定位不可用：' + why + '，改为按当前网络的 IP 定位…', 4000);
+    // 降级：按访问端 IP 定位（城市级；与服务端出口 IP 无关）
+    try {
+      const loc = await ipLocate();
+      if (!loc) throw new Error('no ip location');
+      await saveWxByCoords(loc.lat, loc.lon, loc.city);
+      toast(`已按当前网络 IP 定位到「${loc.city || '附近城市'}」，如需更精准请直接输入地区名`, 4200);
+    } catch(e){
+      toast('浏览器定位与 IP 定位均不可用，请直接输入地区名（如：杭州）', 4200);
+    }
+  }, { timeout: 10000 });
+};
+
+function feedsOf(catKey){
+  const c = state.meta?.categories?.find(x => x.key === catKey);
+  return c ? c.feeds.map(f => f.url) : [];
+}
+
+/** 按节目（或某一期）的参数初始化生成面板 */
+function resetGenState(program, episode){
+  if (!program) return;
+  const s = episode?.script || {};
+  // 有本期记录就按本期来，否则默认把全部分类都选上
+  const allKeys = state.meta.categories.map(c => c.key);
+  const cats = new Set(
+    (s.categories && s.categories.length ? s.categories : allKeys)
+      .filter(k => allKeys.includes(k))
+  );
+  state.selectedCats = cats;
+  const catFeeds = [...cats].flatMap(feedsOf);
+  const prevFeeds = (s.feed_urls || []).filter(u => catFeeds.includes(u));
+  state.selectedFeeds = new Set(prevFeeds.length ? prevFeeds : catFeeds);
+  state.expandedCats = new Set(cats);
+
+  // 默认时间范围：最近几小时（3/6/8 可选，默认 6 小时）
+  state.genMode = 'recent';
+  state.lbCustom = false;
+  state.lookback = 6;
+  state.rate = s.rate || state.meta?.rate || '+10%';
+  const tm = s.target_minutes ? parseFloat(s.target_minutes) : null;
+  if (tm){
+    if (DURATIONS.includes(tm)){ state.targetMin = tm; state.targetCustom = ''; }
+    else { state.targetMin = 'custom'; state.targetCustom = String(tm); }
+  } else {
+    state.targetMin = 10; state.targetCustom = '';
+  }
+  state.sort = SORT_LABELS[s.sort] ? s.sort : 'category';
+  state.voice = (state.meta?.voices || []).some(v => v.value === s.voice) ? s.voice : '';
+}
+
+/* ------- 记住上次调整的设置（localStorage，按「账号 + 节目」分开存） -------
+   注意必须带账号作用域：同一台设备先登录 A 再登录 B 时，
+   不能把 A 上次保存的分类/时长/音色/占比读给 B。 */
+function userScope(){
+  if (!state.user) return 'guest';
+  return 'u' + (state.user.uid || state.user.id || state.user.email || 'x');
+}
+function wxDayKey(){ return `nr_wx_day_${userScope()}`; }
+/* 注意：这里只拼「节目」部分，账号作用域由 prefGet/prefSet 统一加 @u<uid> 后缀 */
+function prefsKey(pid){ return `nr_gen_${pid || state.selectedProgram?.id || 'default'}`; }
+function savePrefs(){
+  try {
+    prefSet(prefsKey(), JSON.stringify({
+      mode: state.genMode, lookback: state.lookback,
+      winStart: state.winStart, winEnd: state.winEnd,
+      rate: state.rate, cats: [...state.selectedCats],
+      feeds: [...state.selectedFeeds],
+      targetMin: state.targetMin, targetCustom: state.targetCustom,
+      sort: state.sort, voice: state.voice,
+      crossday: !!state.crossday,
+      shares: state.feedShares,
+    }));
+  } catch(e){}
+  // 跑步模式：填了合法距离/用时也记一份，右上角 🏃 一键生成要用
+  try {
+    const km = parseFloat($('#runKm')?.value);
+    const min = parseFloat($('#runMin')?.value);
+    if (isFinite(km) && isFinite(min)) rememberRun(km, min);
+  } catch(e){}
+}
+function loadPrefs(pid){
+  try {
+    const p = JSON.parse(prefGet(prefsKey(pid), 'null') || 'null');
+    if (!p || typeof p !== 'object') return false;
+    const catKeys = new Set((state.meta?.categories || []).map(c => c.key));
+    state.selectedCats = new Set((p.cats || []).filter(k => catKeys.has(k)));
+    const allFeeds = [...state.selectedCats].flatMap(feedsOf);
+    state.selectedFeeds = new Set((p.feeds || []).filter(u => allFeeds.includes(u)));
+    state.feedShares = (p.shares && typeof p.shares === 'object' && !Array.isArray(p.shares))
+      ? Object.fromEntries(Object.entries(p.shares).filter(([u, v]) => allFeeds.includes(u) && parseInt(v, 10) >= 1 && parseInt(v, 10) <= 100).map(([u, v]) => [u, parseInt(v, 10)]))
+      : {};
+    if (!state.selectedCats.size){ return false; }   // 记忆里没有可用分类，回默认
+    state.genMode = p.mode === 'custom' ? 'custom' : 'recent';
+    const lbv = parseInt(p.lookback, 10);
+    state.lookback = (lbv >= 1 && lbv <= 72) ? lbv : 6;
+    state.lbCustom = !LOOKBACKS.includes(state.lookback);
+    if (p.winStart) state.winStart = p.winStart;
+    if (p.winEnd) state.winEnd = p.winEnd;
+    if (p.rate) state.rate = p.rate;
+    if (DURATIONS.includes(p.targetMin)){ state.targetMin = p.targetMin; state.targetCustom = ''; }
+    else if (p.targetMin === 'custom' && parseFloat(p.targetCustom) >= 2){
+      state.targetMin = 'custom'; state.targetCustom = p.targetCustom;
+    } else { state.targetMin = 10; state.targetCustom = ''; }
+    state.sort = SORT_LABELS[p.sort] ? p.sort : 'category';
+    state.voice = (state.meta?.voices || []).some(v => v.value === p.voice) ? p.voice : '';
+    state.crossday = !!p.crossday;
+    return true;
+  } catch(e){ return false; }
+}
+
+function windowSpanText(start, end){
+  const toMin = t => { const [h, m] = String(t || '0:0').split(':').map(Number); return h * 60 + m; };
+  let span = toMin(end) - toMin(start);
+  const crossDay = span <= 0;
+  if (crossDay) span += 1440;
+  const txt = span >= 60 ? `${(span / 60).toFixed(span % 60 ? 1 : 0)} 小时` : `${span} 分钟`;
+  return { txt, crossDay };
+}
+
+function renderSheet(){
+  if (!state.meta) return;
+  bindCollapse();
+  // 跑步模式：回填上次用过的距离/用时（右上角 🏃 一键生成也读这份）
+  try {
+    const rc = savedRun();
+    const rk = $('#runKm'), rm = $('#runMin');
+    if (rc && rk && rm && !rk.value && !rm.value){ rk.value = rc.km; rm.value = rc.min; }
+    updateRunHint();
+  } catch(e){}
+  const $m = $('#modeSeg');
+  $m.querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.mode === state.genMode));
+  $('#recentBox').style.display = state.genMode === 'recent' ? '' : 'none';
+  $('#customBox').style.display = state.genMode === 'custom' ? '' : 'none';
+
+  // 回溯档位：3 / 6 / 8 小时 + 自定义
+  const lb = $('#lbSeg');
+  lb.innerHTML = LOOKBACKS.map(h =>
+      `<button data-lb="${h}" class="${!state.lbCustom && state.lookback === h ? 'on' : ''}">${h} 小时</button>`).join('')
+    + `<button data-lb="custom" class="${state.lbCustom ? 'on' : ''}">自定义</button>`;
+  lb.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      if (b.dataset.lb === 'custom'){
+        state.lbCustom = true;
+      } else {
+        state.lbCustom = false;
+        state.lookback = parseInt(b.dataset.lb, 10);
+      }
+      renderSheet();
+    };
+  });
+  $('#lbCustomBox').style.display = state.lbCustom ? '' : 'none';
+  const lbc = $('#lbCustom');
+  if (lbc){
+    lbc.value = state.lookback;
+    lbc.oninput = () => {
+      const v = parseInt(lbc.value, 10);
+      if (!isNaN(v)) state.lookback = Math.min(72, Math.max(1, v));
+    };
+    lbc.onblur = () => { lbc.value = state.lookback; };
+  }
+
+  $('#winStart').value = state.winStart;
+  $('#winEnd').value = state.winEnd;
+
+  // 时间预览
+  let preview;
+  if (state.genMode === 'recent'){
+    preview = `从现在往前抓 <b>${state.lookback}</b> 小时的新闻`;
+  } else {
+    const sp = windowSpanText(state.winStart, state.winEnd);
+    const nd = new Date();
+    const endToday = sp.crossDay
+      ? `今天 ${state.winEnd}`
+      : `今天 ${state.winEnd}`;
+    preview = `${sp.crossDay ? '昨天 ' + state.winStart + ' → ' : state.winStart + ' → '}${endToday}，共 <b>${sp.txt}</b>${sp.crossDay ? '（跨天）' : ''}`;
+  }
+  $('#winSpan').textContent = state.genMode === 'custom' ? windowSpanText(state.winStart, state.winEnd).txt : '';
+  $('#winPreview').innerHTML = preview;
+
+  // 语速
+  const rs = $('#rateSeg');
+  rs.innerHTML = RATES.map(r => `<button data-rate="${r.v}" class="${state.rate === r.v ? 'on' : ''}">${r.label}</button>`).join('');
+  rs.querySelectorAll('button').forEach(b => {
+    b.onclick = () => { state.rate = b.dataset.rate; renderSheet(); };
+  });
+
+  // 目标时长：按时长估算条数
+  const ds = $('#durSeg');
+  const durOpts = DURATIONS.map(m => ({ v: m, label: `${m} 分钟` }))
+    .concat([{ v: 'custom', label: '自定义' }]);
+  ds.innerHTML = durOpts.map(o =>
+    `<button data-dur="${o.v}" class="${state.targetMin == o.v ? 'on' : ''}">${o.label}</button>`).join('');
+  ds.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      const v = b.dataset.dur;
+      if (v === 'custom'){
+        state.targetMin = 'custom';
+        if (!state.targetCustom) state.targetCustom = '15';
+      } else {
+        state.targetMin = parseInt(v, 10);
+        state.targetCustom = '';
+      }
+      renderSheet();
+    };
+  });
+  const isCustom = state.targetMin === 'custom';
+  $('#durCustomBox').style.display = isCustom ? '' : 'none';
+  if (isCustom) $('#durCustom').value = state.targetCustom;
+  $('#durCustom').onchange = e => {
+    const v = parseFloat(e.target.value);
+    state.targetCustom = e.target.value;
+    if (v >= 2 && v <= 120) renderSheet();
+    else $('#durHint').innerHTML = '<span style="color:var(--accent)">请填 2 ~ 120 之间的分钟数</span>';
+  };
+  const tm = effectiveTargetMin();
+  if (tm){
+    const n = estimateItems(tm, state.rate);
+    $('#durItems').textContent = `约 ${n} 条`;
+    $('#durHint').innerHTML = `按 <b>${tm % 1 ? tm.toFixed(1) : tm} 分钟</b>估算，本期约抓 <b>${n}</b> 条新闻（实际以抓取结果为准）`;
+  } else {
+    $('#durItems').textContent = '';
+    $('#durHint').innerHTML = '<span style="color:var(--accent)">请先填写自定义分钟数</span>';
+  }
+
+  // 播报顺序
+  const ss = $('#sortSeg');
+  const sortVals = (state.meta?.sorts?.length ? state.meta.sorts.map(s => s.value) : Object.keys(SORT_LABELS));
+  ss.innerHTML = sortVals.map(v =>
+    `<button data-sort="${v}" class="${state.sort === v ? 'on' : ''}">${SORT_LABELS[v]}</button>`).join('');
+  ss.querySelectorAll('button').forEach(b => {
+    b.onclick = () => { state.sort = b.dataset.sort; renderSheet(); };
+  });
+  $('#sortHint').textContent = SORT_HINTS[state.sort] || '';
+
+  // 音色
+  const vs = $('#voiceSeg');
+  const voices = state.meta?.voices || [];
+  if (voices.length){
+    const cur = state.voice || (state.meta.voice || '');
+    vs.innerHTML = voices.map(v =>
+      `<button data-voice="${v.value}" class="${cur === v.value ? 'on' : ''}">${v.label}</button>`).join('');
+    vs.querySelectorAll('button').forEach(b => {
+      b.onclick = () => { state.voice = b.dataset.voice; renderSheet(); };
+    });
+  } else {
+    vs.innerHTML = '<button class="on">默认音色</button>';
+  }
+
+  // 跨日连续播放
+  const cds = $('#crossdaySeg');
+  if (cds){
+    cds.innerHTML = [['0', '关闭'], ['1', '开启']].map(([v, t]) =>
+      `<button data-cd="${v}" class="${(state.crossday ? '1' : '0') === v ? 'on' : ''}">${t}</button>`).join('');
+    cds.querySelectorAll('button').forEach(b => {
+      b.onclick = () => {
+        state.crossday = b.dataset.cd === '1';
+        savePrefs();
+        renderSheet();
+        toast(state.crossday ? '跨日连续播放已开启' : '跨日连续播放已关闭', 1800);
+      };
+    });
+    $('#crossdayHint').innerHTML = state.crossday
+      ? '已开启：当天播完接着播前一天（以及更早的日期），每段顺序跟随首页选的 <b>正序/倒序</b>'
+      : '关闭时只播当天；开启后当天播完自动接前一天（以及更早的日期），顺序跟随首页选的 <b>正序/倒序</b>';
+  }
+
+  // 睡眠暂停
+  renderSleepSeg();
+
+  // 外观（跟随系统 / 白天 / 黑夜）
+  renderThemeSeg();
+
+  // 允许外部按账号调用（?user=）
+  renderExtSeg();
+
+  // 分类
+  const cl = $('#catList');
+  cl.innerHTML = state.meta.categories.map(c => `
+    <div class="chip ${state.selectedCats.has(c.key) ? 'on' : ''}" data-cat="${c.key}">
+      <span class="dot"></span>${c.label}
+    </div>`).join('');
+  cl.querySelectorAll('.chip').forEach(el => {
+    el.onclick = () => {
+      const k = el.dataset.cat;
+      if (state.selectedCats.has(k)){
+        state.selectedCats.delete(k);
+        feedsOf(k).forEach(u => state.selectedFeeds.delete(u));
+        state.expandedCats.delete(k);
+      } else {
+        state.selectedCats.add(k);
+        feedsOf(k).forEach(u => state.selectedFeeds.add(u));
+        state.expandedCats.add(k);
+      }
+      renderSheet();
+    };
+  });
+
+  // 抓取源
+  const cats = state.meta.categories.filter(c => state.selectedCats.has(c.key));
+  const allFeeds = cats.flatMap(c => c.feeds);
+  const onFeeds = allFeeds.filter(f => state.selectedFeeds.has(f.url));
+  $('#srcCount').textContent = `已选 ${onFeeds.length}/${allFeeds.length}`;
+
+  $('#srcList').innerHTML = cats.map(c => {
+    const urls = c.feeds.map(f => f.url);
+    const on = urls.filter(u => state.selectedFeeds.has(u)).length;
+    const open = state.expandedCats.has(c.key);
+    return `<div class="srcgrp">
+      <div class="srchd ${on ? 'on' : ''} ${open ? 'open' : ''}" data-groupcat="${c.key}">
+        <div class="ck">${CHECK_SVG}</div>
+        <div class="nm">${c.label}</div>
+        <div class="cnt">${on}/${urls.length}</div>
+        <div class="cv">${CV_SVG}</div>
+      </div>
+      <div class="srcbody ${open ? 'open' : ''}">
+        ${c.feeds.map(f => `<div class="srow ${state.selectedFeeds.has(f.url) ? 'on' : ''}" data-feed="${f.url}">
+          <div class="ck">${CHECK_SVG}</div><div class="snm">${f.name}</div>
+          <input class="sharein" data-share="${f.url}" type="number" min="1" max="100" step="1" inputmode="numeric"
+                 placeholder="%" title="生成占比（%）：该源占总条数的比例，留空不参考"
+                 value="${state.feedShares[f.url] || ''}">
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('') || `<div class="sumline">还没有选中的分类，请先在上面勾选</div>`;
+
+  // 源交互：点勾选框批量选中该分类；点其他区域展开
+  $('#srcList').querySelectorAll('.srchd').forEach(el => {
+    el.onclick = (e) => {
+      const k = el.dataset.groupcat;
+      const urls = feedsOf(k);
+      if (e.target.closest('.ck')){
+        const allOn = urls.every(u => state.selectedFeeds.has(u));
+        urls.forEach(u => allOn ? state.selectedFeeds.delete(u) : state.selectedFeeds.add(u));
+      } else {
+        state.expandedCats.has(k) ? state.expandedCats.delete(k) : state.expandedCats.add(k);
+      }
+      renderSheet();
+    };
+  });
+  $('#srcList').querySelectorAll('.srow').forEach(el => {
+    el.onclick = (e) => {
+      if (e.target.closest('.sharein')) return;   // 占比输入框里点选不切换勾选
+      const u = el.dataset.feed;
+      state.selectedFeeds.has(u) ? state.selectedFeeds.delete(u) : state.selectedFeeds.add(u);
+      renderSheet();
+    };
+  });
+  // 占比输入：实时记下，失焦时归一化（1~100，非法清空）
+  $('#srcList').querySelectorAll('.sharein').forEach(inp => {
+    inp.onclick = e => e.stopPropagation();
+    inp.oninput = () => {
+      const u = inp.dataset.share;
+      const v = parseInt(inp.value, 10);
+      if (v >= 1 && v <= 100) state.feedShares[u] = v;
+      else delete state.feedShares[u];
+      savePrefs();
+    };
+    inp.onchange = () => {
+      const v = parseInt(inp.value, 10);
+      inp.value = (v >= 1 && v <= 100) ? v : '';
+      if (inp.value) toast(`生成占比 ${inp.value}%：本期约 ${inp.value}% 的条数来自该源`);
+    };
+  });
+
+  $('#catAll').onclick = () => {
+    state.selectedCats = new Set(state.meta.categories.map(c => c.key));
+    state.selectedFeeds = new Set(state.meta.categories.flatMap(c => c.feeds.map(f => f.url)));
+    renderSheet();
+  };
+  $('#catNone').onclick = () => {
+    state.selectedCats = new Set(); state.selectedFeeds = new Set(); renderSheet();
+  };
+  $('#srcAll').onclick = () => {
+    state.selectedFeeds = new Set(state.meta.categories.filter(c => state.selectedCats.has(c.key))
+      .flatMap(c => c.feeds.map(f => f.url)));
+    renderSheet();
+  };
+  $('#srcNone').onclick = () => { state.selectedFeeds = new Set(); renderSheet(); };
+
+  renderAuto();
+  renderBgm();
+
+  $m.querySelectorAll('button').forEach(b => {
+    b.onclick = () => { state.genMode = b.dataset.mode; renderSheet(); };
+  });
+  $('#winStart').onchange = e => { state.winStart = e.target.value || state.winStart; renderSheet(); };
+  $('#winEnd').onchange = e => { state.winEnd = e.target.value || state.winEnd; renderSheet(); };
+}
+
+/* ---------------- 自动更新 ---------------- */
+function fmtInterval(h){
+  const n = parseFloat(h) || 0;
+  if (n <= 0) return '0';
+  if (n < 1) return `${Math.round(n * 60)} 分钟`;
+  return `${n % 1 === 0 ? n : n.toFixed(1)} 小时`;
+}
+
+function fmtClock(d){
+  const now = new Date();
+  const hm = `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+  return d.toDateString() === now.toDateString() ? hm : `${d.getMonth()+1}/${d.getDate()} ${hm}`;
+}
+
+function updateClock(){
+  if (!state.meta) return;
+  const a = state.auto;
+  // 第一行节目名；第二行自动更新状态（含下次生成时间），避免把右上角按钮顶出去
+  const names = (state.meta.programs || []).map(p => p.name).join(' / ');
+  let autoTxt = '';
+  if (a?.enabled){
+    const t = a.next_run ? new Date(a.next_run) : null;
+    autoTxt = `<span class="autoline">自动 ${fmtInterval(a.interval_hours)}${t && !isNaN(t) ? ` · 下次 <b style="color:var(--accent);font-weight:650">${fmtClock(t)}</b>` : ''}</span>`;
+  }
+  const el = $('#clock');
+  // 睡眠倒计时徽标紧跟节目名（同一行内联），自动更新信息独占下一行
+  el.innerHTML = `${names}<span id="clockSleep" style="display:none"></span>${autoTxt}`;
+  el.title = `共 ${(state.meta.programs || []).length} 档节目：${names}`;
+  renderSleepBadge();   // 睡眠倒计时如果开着，把徽标补回来
+}
+
+function renderAuto(){
+  const a = state.auto || {};
+  const seg = $('#autoSeg');
+  if (!seg) return;
+  const intervals = a.intervals || [1,2,3,6,12,24];
+  const cur = a.enabled ? Number(a.interval_hours) : 0;
+  const opts = [{v:0, label:'关闭'}].concat(intervals.map(h => ({v:h, label:`每 ${fmtInterval(h)}`})));
+  seg.innerHTML = opts.map(o =>
+    `<div class="chip ${cur === o.v ? 'on' : ''}" data-auto="${o.v}">${o.label}</div>`).join('');
+  seg.querySelectorAll('.chip').forEach(el => {
+    el.onclick = () => {
+      if (state.autoSaving) return;
+      saveAuto(parseFloat(el.dataset.auto));
+    };
+  });
+
+  const st = $('#autoState');
+  $('#autoStartBox').style.display = a.enabled ? '' : 'none';
+  if (a.enabled){
+    const as = $('#autoStart');
+    if (as && document.activeElement !== as) as.value = a.start_hhmm || '00:00';
+    const t = a.next_run ? new Date(a.next_run) : null;
+    st.innerHTML = `<span style="color:var(--accent)">已开启</span>${t && !isNaN(t) ? ' · 下次 ' + fmtClock(t) : ''}`;
+    $('#autoHint').innerHTML =
+      `从 <b>${a.start_hhmm || '00:00'}</b> 起、每 <b>${fmtInterval(a.interval_hours)}</b>自动生成一期（下次 ${t && !isNaN(t) ? fmtClock(t) : '—'}），用上面勾选的时间范围、语速、时长、分类和源`;
+  } else {
+    st.textContent = '未开启';
+    $('#autoHint').textContent = '开启后按上面选的时间范围、语速、时长、分类和源，每隔一段时间自动生成一期';
+  }
+}
+
+/* 改开始时间立即按当前间隔重新对齐 */
+$('#autoStart')?.addEventListener('change', () => {
+  const cur = state.auto?.enabled ? Number(state.auto.interval_hours) : 0;
+  if (cur > 0 && !state.autoSaving) saveAuto(cur);
+});
+
+/** hours=0 表示关闭；开启时把当前面板里的参数一并记下来，供自动更新使用 */
+async function saveAuto(hours, opts = {}){
+  if (!state.user){ toast('请先登录后再设置自动更新'); return; }
+  const enabled = hours > 0;
+  const cats = [...state.selectedCats];
+  if (enabled && !cats.length){ toast('请先勾选至少一个分类'); return; }
+  const body = {
+    enabled,
+    interval_hours: enabled ? hours : Number(state.auto?.interval_hours || 6),
+    start_hhmm: $('#autoStart')?.value || '00:00',
+    program_id: state.selectedProgram?.id,
+    categories: cats,
+    feeds: cats.flatMap(feedsOf).filter(u => state.selectedFeeds.has(u)),
+    shares: collectShares(cats.flatMap(feedsOf).filter(u => state.selectedFeeds.has(u))),
+    rate: state.rate,
+    target_minutes: effectiveTargetMin(),
+    sort: state.sort,
+    voice: state.voice,
+    reschedule: opts.reschedule !== false,
+  };
+  state.autoSaving = true;
+  try {
+    state.auto = await api('/api/auto', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    renderSheet();
+    updateClock();
+    if (!opts.silent){
+      const t = state.auto?.next_run ? new Date(state.auto.next_run) : null;
+      toast(enabled
+        ? `已开启：每 ${fmtInterval(hours)}自动更新${t && !isNaN(t) ? `，下次 ${fmtClock(t)}` : ''}`
+        : '已关闭自动更新', 3000);
+    }
+  } catch(e){
+    toast('设置失败：' + (e.detail || e.message || ''));
+  } finally {
+    state.autoSaving = false;
+  }
+}
+
+async function loadEpisodes(){
+  state.episodes = await api('/api/episodes?limit=20');
+  if (!state.episodes.length){
+    // 该账号没有节目：把上一位账号残留的音频和播放条一并清掉，不能继续播别人的
+    try { audio.pause(); audio.removeAttribute('src'); } catch(e){}
+    state.current = null; state.chapters = [];
+    state.queue = []; state.queueIdx = -1;
+    $('#player')?.classList.add('hide');
+    updateQueueBadge();
+    render(); return;
+  }
+  const keepId = state.current?.id;
+  const target = keepId && state.episodes.find(e => e.id === keepId) ? keepId : state.episodes[0].id;
+  await openEpisode(target, false, true);
+}
+
+async function openEpisode(id, autoplay = false, silent = false){
+  const ep = await api(`/api/episodes/${id}`);
+  state.current = ep;
+  state.chapters = ep.script?.chapters || [];
+  state.runInfo = ep.script?.run || null;
+  renderRunStrip();
+  renderKmTicks();
+  render();
+  if (autoplay || audio.src) {
+    // 已经在听别的节目时，切换过去
+    const wasPlaying = !audio.paused;
+    await loadEpisode(ep, autoplay || wasPlaying);
+  } else {
+    updatePlayerUI(ep, 0);
+  }
+  if (!silent) window.scrollTo({top:0, behavior:'smooth'});
+}
+
+/* ---------------- 播放器 ---------------- */
+async function playWeatherFirst(ep){
+  /* 当日首次播放最新一期：先播独立的天气音频，结束后自动接正片。
+     一天只前置一次（nr_wx_day 记录），往期节目不前置。 */
+  let wx = null;
+  try { wx = await api('/api/weather/audio'); } catch(e){}
+  if (!wx || !wx.exists){
+    // 没拿到音频（未开启/合成失败）不标记当天：之后开启天气或补合成成功仍会前置
+    return loadEpisode(ep, true);
+  }
+  localStorage.setItem(wxDayKey(), todayKey());
+  state.wxPlaying = true;
+  state.wxAfter = ep;
+  bgm.pause(); bgm.removeAttribute('src');
+  audioRetried = 0;
+  audio.src = wx.url;
+  audio.playbackRate = 1;
+  $('#player').classList.remove('hide');
+  updatePlayerUI(ep, 0);
+  $('#pChapter').textContent = '今日天气';
+  $('#pQueue').textContent = '';
+  toast('先播今日天气，随后自动进入正片');
+  try { await audio.play(); }
+  catch(e){ state.wxPlaying = false; return loadEpisode(ep, true); }
+}
+
+/* ---------------- 跑步模式 ---------------- */
+function fmtPace(sec){
+  sec = Math.max(0, Math.round(sec));
+  return `${Math.floor(sec / 60)}'${String(sec % 60).padStart(2, '0')}"`;
+}
+/* 距离文案：整数不带小数（5 km），非整数保留一位（5.5 km） */
+function kmText(km){
+  const n = Number(km) || 0;
+  return Number.isInteger(n) ? String(n) : n.toFixed(1);
+}
+/* 每公里一个刻度（进度条共用）：5 km → 4 条内刻度 */
+function kmTicksHtml(km){
+  const n = Math.round(Number(km) || 0);
+  return n > 1
+    ? Array.from({length: n - 1}, (_, i) => `<u style="left:${((i + 1) / n * 100).toFixed(2)}%"></u>`).join('')
+    : '';
+}
+/* 配速（秒/公里）：优先用服务端写进 script 的 pace_sec，缺失时按目标分钟兜底 */
+function runPaceSec(){
+  const r = state.runInfo;
+  if (!r) return 0;
+  const p = Number(r.pace_sec);
+  if (p > 0) return p;
+  const km = Number(r.km) || 1;
+  return (Number(r.minutes) || km * 6) * 60 / km;
+}
+/* 跑步条：渲染到吸顶导航正下方（sticky），播完新闻后 BGM 的暂停键也在这里 */
+let rsTicksDur = 0;
+function renderRunStrip(){
+  const host = $('#runStrip');
+  if (!host) return;
+  const r = state.runInfo;
+  if (!r || !state.current){
+    host.classList.add('hide');
+    host.innerHTML = '';
+    return;
+  }
+  host.classList.remove('hide');
+  host.innerHTML = `
+    <div class="rsbar" style="color:var(--dim)"><i id="rsFill"></i><span id="rsTicks"></span></div>
+    <div class="rstext">
+      <span>🏃 <b id="rsPos">0.0</b> / ${kmText(r.km)} km</span>
+      <span>配速 ${r.pace || ''}</span>
+      <button class="rsbgm" id="rsBgm" title="暂停 / 继续背景音乐（播报结束后音乐不会自己停）">⏸ 音乐</button>
+    </div>`;
+  const hdr = document.querySelector('header');
+  if (hdr) document.documentElement.style.setProperty('--hdrH', hdr.offsetHeight + 'px');
+  $('#rsBgm').onclick = toggleRunBgm;
+  rsTicksDur = 0;
+  updateRunStrip(audio.currentTime, audio.duration || state.current.duration || 0);
+}
+window.addEventListener('resize', () => {
+  const hdr = document.querySelector('header');
+  if (hdr) document.documentElement.style.setProperty('--hdrH', hdr.offsetHeight + 'px');
+});
+function renderRsBgmBtn(){
+  const b = $('#rsBgm');
+  if (!b) return;
+  b.textContent = bgm.paused ? '▶ 音乐' : '⏸ 音乐';
+}
+function toggleRunBgm(){
+  if (bgm.paused){
+    if (!state.bgmMood){ state.bgmMood = 'drive'; renderBgm(); }
+    bgmEnsureGain();
+    if (bgmCtx && bgmCtx.state === 'suspended') bgmCtx.resume().catch(()=>{});
+    if (!bgm.src) bgmPick();
+    bgm.play().catch(()=>{});
+  } else {
+    bgm.pause();
+  }
+  renderRsBgmBtn();
+}
+/* 按配速打刻度：第 i 公里落在 pace*i 秒的位置（相对实际音频时长），不是总时长均分 */
+function kmTicksByPace(d){
+  const km = Math.round(Number(state.runInfo?.km) || 0);
+  const pace = runPaceSec();
+  if (!(km > 1) || !d || !(pace > 0)) return '';
+  return Array.from({length: km - 1}, (_, i) => {
+    const left = (i + 1) * pace / d * 100;
+    return left >= 99.5 ? '' : `<u style="left:${left.toFixed(2)}%"></u>`;
+  }).join('');
+}
+function renderKmTicks(){
+  const box = $('#kmTicks');
+  if (!box) return;
+  if (!state.runInfo){ box.innerHTML = ''; return; }
+  box.innerHTML = kmTicksByPace(audio.duration || state.current?.duration || 0);
+}
+/* hero 里那条窄进度：吸顶导航正下方，滚动时始终可见 */
+function updateRunStrip(t, d){
+  if (!state.runInfo) return;
+  const km = Number(state.runInfo.km) || 1;
+  const pace = runPaceSec() || (d / km);
+  // 按配速换算当前里程：播到 pace*1 秒才是 1 公里（时长有误差时不能按比例均摊）
+  const cur = Math.min(km, (t || 0) / pace);
+  const fill = $('#rsFill'), pos = $('#rsPos');
+  if (fill) fill.style.width = `${Math.min(100, (cur / km) * 100)}%`;
+  if (pos) pos.textContent = cur.toFixed(1);
+  // 时长就绪后（且和上次不同）按配速重打一次刻度
+  if (d && Math.round(d) !== rsTicksDur){
+    rsTicksDur = Math.round(d);
+    const tk = $('#rsTicks');
+    if (tk) tk.innerHTML = kmTicksByPace(d);
+    renderKmTicks();
+  }
+}
+/* 跑步节目自动换「激进」BGM（配速节奏更快），切回普通节目时恢复原风格 */
+function applyRunBgm(ep){
+  if (ep?.script?.run){
+    if (state.bgmMood !== 'drive'){
+      state.runPrevMood = state.runPrevMood || state.bgmMood || 'soft';
+      state.bgmMood = 'drive';
+      renderBgm();
+      toast('跑步模式：背景音乐已切换为激进节奏', 3200);
+    }
+  } else if (state.runPrevMood){
+    const back = state.runPrevMood;
+    state.runPrevMood = '';
+    const mood = BGM_TRACKS[back] ? back : '';
+    if (state.bgmMood !== mood){
+      state.bgmMood = mood;
+      renderBgm();
+    }
+  }
+}
+/* 跑完淡出：新闻正片结束时背景音乐 3 秒渐弱后停止（普通节目保持原来的立即停） */
+function bgmFadeOut(ms = 3000){
+  if (bgm.paused || !state.bgmMood){ bgm.pause(); return; }
+  const g0 = bgmGain ? bgmGain.gain.value : bgm.volume;
+  const steps = 15, dt = Math.max(60, ms / steps);
+  let i = 0;
+  const timer = setInterval(() => {
+    i++;
+    const f = Math.max(0, 1 - i / steps);
+    if (bgmGain) bgmGain.gain.value = g0 * f;
+    else { try { bgm.volume = g0 * f; } catch(e){} }
+    if (i >= steps){ clearInterval(timer); bgm.pause(); bgmApplyVol(); }
+  }, dt);
+}
+
+function loadEpisode(ep, autoplay){
+  // 当日首次播放最新一期 → 前置天气（正在播天气时、往期节目、跑步节目都不触发：
+  // 跑步节目时长必须精确贴合用时，不掺天气音频）
+  if (autoplay && !state.wxPlaying && state.user && !ep.script?.run
+      && state.episodes && state.episodes[0] && state.episodes[0].id === ep.id
+      && localStorage.getItem(wxDayKey()) !== todayKey()){
+    return playWeatherFirst(ep);
+  }
+  return new Promise(resolve => {
+    bgm.pause();
+    applyRunBgm(ep);             // 跑步节目先切好 BGM 风格，play 事件会按当前风格重新选曲
+    bgm.removeAttribute('src');   // 清掉当前曲目，下次播放重新随机选一首
+    audio.src = `/audio/${ep.audio_file}`;
+    audio.playbackRate = parseFloat(localStorage.getItem('nr_rate') || '1');
+    updatePlayerUI(ep, 0);
+    $('#player').classList.remove('hide');
+    // 跑步节目每次都从头播（里程进度才有意义），不恢复上次位置
+    const saved = ep.script?.run ? 0 : parseFloat(localStorage.getItem(`nr_pos_${ep.id}`) || '0');
+    audio.onloadedmetadata = () => {
+      if (saved > 3 && saved < audio.duration - 10) {
+        audio.currentTime = saved;
+        toast(`已定位到上次听到的 ${fmtTime(saved)}`);
+      }
+      updatePlayerUI(ep, audio.currentTime);
+      resolve();
+    };
+    if (autoplay) audio.play().catch(() => toast('点一下播放按钮开始收听'));
+    setTimeout(resolve, 1200);
+  });
+}
+
+function updatePlayerUI(ep, t){
+  if (!ep) return;
+  const ch = chapterAt(t);
+  $('#pChapter').textContent = ch ? ch.title.slice(0, 22) : '';   // 底部只放章节标题（窄屏放不下公里+配速，进度挪到顶部）
+  $('#pTime').textContent = `${fmtTime(t)} / ${fmtTime(audio.duration || ep.duration)}`;
+  $('#btnRate').textContent = `${audio.playbackRate}×`;
+  updateQueueBadge();
+  updateRunStrip(t, audio.duration || ep.duration);
+}
+
+function chapterAt(t){
+  let cur = null;
+  for (const c of state.chapters){ if (c.start <= t + 0.05) cur = c; else break; }
+  return cur;
+}
+
+/* ---- 正在播报的条目：高亮 + 自动居中（避开底部播放栏） ---- */
+let curChapterKey = null;
+
+function playerBarHeight(){
+  const p = document.querySelector('#player');
+  return (p && !p.classList.contains('hide')) ? p.offsetHeight : 0;
+}
+
+function centerItem(el){
+  const ph = playerBarHeight();
+  const r = el.getBoundingClientRect();
+  const avail = Math.max(200, window.innerHeight - ph);
+  const target = window.scrollY + r.top - Math.max(10, (avail - r.height) / 2);
+  window.scrollTo({ top: Math.max(0, target), behavior: 'smooth' });
+}
+
+function syncCurItem(ch, force){
+  let curEl = null;
+  document.querySelectorAll('.item').forEach(el => {
+    const on = !!ch && String(ch.index) === el.dataset.idx;
+    el.classList.toggle('cur', on);
+    if (on) curEl = el;
+  });
+  if (!curEl) return;
+  const key = String(ch.index);
+  if (!force && key === curChapterKey) return;
+  curChapterKey = key;
+  centerItem(curEl);
+}
+
+function togglePlay(){
+  if (!audio.src){
+    if (state.current) loadEpisode(state.current, true);
+    return;
+  }
+  if (audio.paused) audio.play(); else audio.pause();
+}
+
+function seekTo(t){
+  if (!audio.src && state.current) {
+    loadEpisode(state.current, true).then(() => { audio.currentTime = t; });
+    return;
+  }
+  audio.currentTime = Math.max(0, Math.min(t, audio.duration || t));
+  audio.play().catch(()=>{});
+}
+
+/* ---------------- 背景轻音乐（内置 6 首本机合成的无版权纯音乐：轻柔/激进/愉快 各 2 首，默认关闭） ----------------
+   音量走 Web Audio 增益（GainNode）：iOS 上 audio.volume 是只读的，直接改元素音量在手机上不生效 */
+const BGM_MOODS = [
+  { k: '',      label: '关闭' },
+  { k: 'soft',  label: '轻柔' },
+  { k: 'drive', label: '激进' },
+  { k: 'happy', label: '愉快' },
+];
+const BGM_TRACKS = {
+  soft:  ['/static/bgm/soft1.mp3', '/static/bgm/soft2.mp3'],
+  drive: ['/static/bgm/drive1.mp3', '/static/bgm/drive2.mp3'],
+  happy: ['/static/bgm/happy1.mp3', '/static/bgm/happy2.mp3'],
+};
+let bgmLastTrack = '';
+function bgmPick(){
+  const list = BGM_TRACKS[state.bgmMood] || BGM_TRACKS.soft;
+  let url;
+  do { url = list[Math.floor(Math.random() * list.length)]; } while (list.length > 1 && url === bgmLastTrack);
+  bgmLastTrack = url;
+  if (bgm.src !== url && !bgm.src.endsWith(url)) bgm.src = url;
+}
+const bgm = new Audio();
+bgm.loop = true;
+let bgmCtx = null, bgmGain = null;
+/* 跑步条上的「音乐」按钮跟着 BGM 实际状态走（播报结束自动续播时也要刷新） */
+bgm.addEventListener('play', () => renderRsBgmBtn());
+bgm.addEventListener('pause', () => renderRsBgmBtn());
+function bgmEnsureGain(){
+  if (bgmGain || !(window.AudioContext || window.webkitAudioContext)) return;
+  try {
+    bgmCtx = new (window.AudioContext || window.webkitAudioContext)();
+    bgmGain = bgmCtx.createGain();
+    bgmCtx.createMediaElementSource(bgm).connect(bgmGain);
+    bgmGain.connect(bgmCtx.destination);
+    window.__bgmGain = () => bgmGain ? bgmGain.gain.value : null;   // 调试用：当前增益
+    window.__bgmDebug = () => ({src: bgm.src.split('/').pop(), paused: bgm.paused, gain: bgmGain?.gain.value ?? null, ctx: bgmCtx?.state ?? null});
+  } catch(e){ bgmCtx = null; bgmGain = null; }
+}
+const BGM_MAX_GAIN = 1.2;   // 100% 时的增益倍数：曲目峰值归一在 0.82，1.2 倍仍不会削波
+function bgmApplyVol(){
+  const vol = Math.min(100, Math.max(0, state.bgmVol));
+  const g = vol / 100 * BGM_MAX_GAIN;
+  if (bgmGain){ bgmGain.gain.value = g; try { bgm.volume = 1; } catch(e){} }
+  else { try { bgm.volume = Math.min(1, g); } catch(e){} }   // 无 Web Audio 时退回原生音量（iOS 只读）
+}
+const bgmMoodSaved = prefGet('nr_bgm_mood', '');
+state.bgmMood = BGM_TRACKS[bgmMoodSaved] ? bgmMoodSaved : (prefGet('nr_bgm', '') === '1' ? 'soft' : '');
+state.bgmVol = Math.min(100, Math.max(0, parseInt(prefGet('nr_bgm_vol', '15'), 10) || 15));
+bgmEnsureGain();
+bgmApplyVol();
+bgmPick();
+
+/* 后台/锁屏自愈：安卓 Chrome、iOS Safari 会在页面退后台或锁屏时挂起 AudioContext，
+   新闻是原生 <audio> 不受影响，而背景音乐必须经过 ctx 输出就会突然没声。
+   这里在 ctx 被挂起、回到前台、以及播放过程中持续尝试恢复。 */
+function bgmRevive(){
+  if (!state.bgmMood || audio.paused) return;   // 没开音乐或没在播就不动
+  if (bgmCtx && bgmCtx.state !== 'running') bgmCtx.resume().catch(()=>{});
+  if (!bgm.src) bgmPick();
+  if (bgm.paused) bgm.play().catch(()=>{});
+}
+if (bgmCtx) bgmCtx.onstatechange = bgmRevive;                  // ctx 被系统挂起/恢复时
+document.addEventListener('visibilitychange', () => { if (!document.hidden) bgmRevive(); });  // 回到前台
+window.addEventListener('focus', bgmRevive);
+window.addEventListener('pageshow', bgmRevive);
+audio.addEventListener('timeupdate', bgmRevive);               // 播放中持续自愈（后台标签页媒体事件不被节流）
+
+function renderBgm(){
+  const seg = $('#bgmSeg');
+  if (!seg) return;
+  seg.innerHTML = BGM_MOODS.map(m =>
+    `<div class="chip ${state.bgmMood === m.k ? 'on' : ''}" data-mood="${m.k}">${m.label}</div>`).join('');
+  seg.querySelectorAll('.chip').forEach(el => {
+    el.onclick = () => {
+      state.bgmMood = el.dataset.mood;
+      prefSet('nr_bgm_mood', state.bgmMood);
+      prefSet('nr_bgm', state.bgmMood ? '1' : '0');   // 兼容旧开关记忆
+      if (state.bgmMood){ bgmPick(); } else { bgmLastTrack = ''; }
+      applyBgm();
+      renderBgm();
+      if (state.bgmMood) toast(`背景轻音乐：${BGM_MOODS.find(m => m.k === state.bgmMood).label}`, 1800);
+    };
+  });
+  const cur = BGM_MOODS.find(m => m.k === state.bgmMood);
+  $('#bgmState').textContent = cur && cur.k ? cur.label : '未开启';
+  $('#bgmVolBox').style.display = state.bgmMood ? '' : 'none';
+  const vs = $('#bgmVol');
+  vs.value = state.bgmVol;
+  $('#bgmVolTxt').textContent = `音量 ${state.bgmVol}%`;
+  vs.oninput = () => {
+    state.bgmVol = Math.min(100, Math.max(0, parseInt(vs.value, 10) || 0));
+    bgmApplyVol();
+    prefSet('nr_bgm_vol', String(state.bgmVol));
+    $('#bgmVolTxt').textContent = `音量 ${state.bgmVol}%`;
+  };
+}
+function applyBgm(){
+  if (state.bgmMood && audio.src && !audio.paused && !audio.ended){
+    bgmEnsureGain();
+    if (bgmCtx && bgmCtx.state === 'suspended') bgmCtx.resume().catch(()=>{});
+    if (!bgm.src) bgmPick();
+    if (bgm.paused) bgm.play().catch(()=>{});
+  } else if (!bgm.paused){
+    bgm.pause();
+  }
+}
+
+/* ---------------- 睡眠暂停（倒计时到点强制暂停） ---------------- */
+const SLEEP_PRESETS = [0, 10, 15, 20];
+
+function renderSleepSeg(){
+  const seg = $('#sleepSeg');
+  if (!seg) return;
+  const cur = state.sleepMin || 0;
+  const isCustom = cur > 0 && !SLEEP_PRESETS.includes(cur);
+  const opts = [['0', '关闭'], ['10', '10 分钟'], ['15', '15 分钟'], ['20', '20 分钟'], ['custom', '自定义']];
+  seg.innerHTML = opts.map(([v, t]) => {
+    const on = v === 'custom' ? isCustom : String(cur) === v;
+    const label = (v === 'custom' && isCustom) ? `${cur} 分钟` : t;
+    return `<button data-sl="${v}" class="${on ? 'on' : ''}">${label}</button>`;
+  }).join('');
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = () => {
+      const v = b.dataset.sl;
+      if (v === 'custom'){
+        const box = $('#sleepCustomBox');
+        if (box) box.style.display = '';
+        const inp = $('#sleepCustom');
+        if (inp){ inp.value = isCustom ? String(cur) : ''; inp.focus(); }
+        return;
+      }
+      setSleep(parseInt(v, 10) || 0);
+    };
+  });
+  const box = $('#sleepCustomBox');
+  if (box) box.style.display = isCustom ? '' : 'none';
+  const inp = $('#sleepCustom');
+  if (inp && document.activeElement !== inp){
+    inp.value = isCustom ? String(cur) : '';
+    inp.oninput = () => {
+      const m = parseInt(inp.value, 10);
+      if (m >= 1 && m <= 240) setSleep(m, true);   // 输入过程中不重绘（否则会丢焦点）
+    };
+  }
+  const st = $('#sleepState');
+  if (st) st.textContent = cur ? `已设 ${cur} 分钟` : '关闭';
+}
+
+function setSleep(min, typing){
+  const m = Math.max(0, Math.min(240, parseInt(min, 10) || 0));
+  state.sleepMin = m;
+  prefSet('nr_sleep_min', String(m));
+  sleepClear();                                   // 改设置 = 重新计时
+  if (m > 0 && audio.src && !audio.paused) sleepArm();
+  if (!typing){
+    renderSleepSeg();
+    toast(m > 0 ? `睡眠暂停：${m} 分钟后自动暂停` : '睡眠暂停已关闭', 2000);
+  }
+  renderSleepBadge();
+}
+
+function sleepArm(){
+  if (!state.sleepMin || state.sleepTimer) return;
+  state.sleepAt = Date.now() + state.sleepMin * 60000;
+  state.sleepTimer = setInterval(sleepTick, 1000);
+  renderSleepBadge();
+}
+
+function sleepClear(){
+  if (state.sleepTimer) clearInterval(state.sleepTimer);
+  state.sleepTimer = null;
+  state.sleepAt = 0;
+  renderSleepBadge();
+}
+
+function sleepTick(){
+  if (!state.sleepAt) return;
+  const left = state.sleepAt - Date.now();
+  if (left > 0){ renderSleepBadge(left); return; }
+  sleepClear();
+  if (!audio.paused) audio.pause();
+  toast('睡眠暂停时间到，已暂停播放', 3200);
+}
+
+function renderSleepBadge(leftMs){
+  /* 睡眠倒计时显示在顶部节目名（如「要闻速听」）右边 */
+  const el = $('#clockSleep');
+  if (!el) return;
+  if (!state.sleepAt){ el.style.display = 'none'; el.textContent = ''; return; }
+  const ms = (leftMs === undefined) ? Math.max(0, state.sleepAt - Date.now()) : leftMs;
+  const sec = Math.ceil(ms / 1000);
+  el.style.display = 'inline';
+  el.style.cssText = 'display:inline;margin-left:6px;color:var(--accent);font-weight:650;cursor:pointer;white-space:nowrap';
+  el.textContent = `⏱ ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  el.title = '睡眠暂停剩余时间，点一下取消';
+  el.onclick = () => { sleepClear(); toast('睡眠暂停已取消', 1800); };
+}
+
+audio.addEventListener('play', () => {
+  $('#icoPlay').style.display = 'none';
+  $('#icoPause').style.display = '';
+  $('#wave')?.classList.add('on');
+  const hp = $('#heroPlay');
+  if (hp){ hp.classList.add('playing'); hp.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><rect x="7" y="5" width="3.6" height="14" rx="1.4"/><rect x="13.4" y="5" width="3.6" height="14" rx="1.4"/></svg><span>正在播放</span>'; }
+  $('#player').classList.remove('hide');
+  if (state.bgmMood){
+    bgmEnsureGain();
+    if (bgmCtx && bgmCtx.state === 'suspended') bgmCtx.resume().catch(()=>{});
+    if (!bgm.src) bgmPick();   // 每次播放会话随机选一首
+    bgm.play().catch(()=>{});
+  }
+  sleepArm();                  // 开始播放 → 启动睡眠倒计时（已设过才生效）
+});
+/* 播放真正开始后：把正在播的文稿条目滚到可视区中央（避开底部播放栏） */
+audio.addEventListener('playing', () => {
+  audioRetried = 0;
+  setTimeout(() => syncCurItem(chapterAt(audio.currentTime), true), 60);
+});
+audio.addEventListener('pause', () => {
+  $('#icoPlay').style.display = '';
+  $('#icoPause').style.display = 'none';
+  $('#wave')?.classList.remove('on');
+  const hp = $('#heroPlay');
+  if (hp){ hp.classList.remove('playing'); hp.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.5v13l11-6.5z"/></svg><span>继续收听</span>'; }
+  // 跑步模式播到结尾时不算"手动暂停"：BGM 继续放，由用户在跑步条上手动停
+  if (!(audio.ended && state.runInfo)) bgm.pause();
+});
+audio.addEventListener('timeupdate', () => {
+  // 后台标签页 setInterval 被节流，靠 timeupdate 兜底保证睡眠到点准时暂停
+  if (state.sleepAt && Date.now() >= state.sleepAt){ sleepTick(); return; }
+  if (state.wxPlaying){
+    // 正在播天气前置：只刷进度条，不写章节/记忆位置（避免污染正片的续播点）
+    const d = audio.duration || 1;
+    $('#fill').style.width = `${(audio.currentTime / d) * 100}%`;
+    $('#seekRange').value = Math.round((audio.currentTime / d) * 1000);
+    $('#pTime').textContent = `今日天气 ${fmtTime(audio.currentTime)} / ${fmtTime(d)}`;
+    return;
+  }
+  if (!state.current) return;
+  const d = audio.duration || state.current.duration || 1;
+  if (!seeking) {
+    $('#fill').style.width = `${(audio.currentTime / d) * 100}%`;
+    $('#seekRange').value = Math.round((audio.currentTime / d) * 1000);
+  }
+  $('#pTime').textContent = `${fmtTime(audio.currentTime)} / ${fmtTime(d)}`;
+  const ch = chapterAt(audio.currentTime);
+  $('#pChapter').textContent = ch ? ch.title.slice(0, 22) : '';
+  updateRunStrip(audio.currentTime, d);
+  syncCurItem(ch);
+  if (Math.floor(audio.currentTime) % 5 === 0) {
+    localStorage.setItem(`nr_pos_${state.current.id}`, audio.currentTime.toFixed(1));
+  }
+});
+audio.addEventListener('ended', () => {
+  if (state.wxPlaying){
+    // 天气播完 → 无缝接正片
+    state.wxPlaying = false;
+    const nxt = state.wxAfter;
+    state.wxAfter = null;
+    $('#pChapter').textContent = '';
+    if (nxt) loadEpisode(nxt, true);
+    return;
+  }
+  localStorage.removeItem(`nr_pos_${state.current?.id}`);
+  // 跑步模式：新闻播完背景音乐继续（配速节奏别断），用户手动暂停；普通节目立即停
+  if (state.runInfo && state.bgmMood){
+    bgmEnsureGain();
+    if (!bgm.src) bgmPick();
+    if (bgm.paused) bgm.play().catch(()=>{});
+  } else if (!state.runInfo){
+    bgm.pause();
+  }
+  if (!queueNext()) {
+    sleepClear();
+    if (state.runInfo){
+      toast('播报完毕，背景音乐继续播放；点顶部跑步条右侧「音乐」按钮可暂停', 4600);
+    } else {
+      toast('本期播放完毕');
+    }
+  }
+});
+let audioRetried = 0;
+audio.addEventListener('error', async () => {
+  if (!audio.src) return;
+  // 天气前置音频失败：直接跳过，接正片
+  if (state.wxPlaying){
+    state.wxPlaying = false;
+    const nxt = state.wxAfter;
+    state.wxAfter = null;
+    if (nxt) { toast('天气音频加载失败，直接播放正片'); loadEpisode(nxt, true); }
+    return;
+  }
+  const err = audio.error;
+  const code = err ? err.code : 0;
+
+  // 网络类错误（中断/网络）先自动重连一次，多半能恢复
+  if ((code === 1 || code === 2) && audioRetried < 1) {
+    audioRetried++;
+    const url = audio.src.split('#')[0].split('?')[0];
+    const at = audio.currentTime || 0;
+    audio.src = `${url}?r=${Date.now()}`;
+    try {
+      await audio.play();
+      if (at > 0) audio.currentTime = at;
+      return;
+    } catch (e) { /* 继续走下面的提示 */ }
+  }
+
+  const reasons = {
+    1: '加载被中断',
+    2: '网络连接中断，请检查网络后重试',
+    3: '音频解码失败，该期文件可能损坏',
+    4: '音频格式不受支持',
+  };
+  if (state.current) {
+    toast(`播放失败：${reasons[code] || '未知错误'}。可点右上角重新生成该期`, 4500);
+  }
+});
+
+$('#seekRange').addEventListener('input', e => {
+  seeking = true;
+  const d = audio.duration || state.current?.duration || 1;
+  const t = (e.target.value / 1000) * d;
+  $('#fill').style.width = `${e.target.value / 10}%`;
+  $('#pTime').textContent = `${fmtTime(t)} / ${fmtTime(d)}`;
+});
+$('#seekRange').addEventListener('change', e => {
+  const d = audio.duration || state.current?.duration || 1;
+  audio.currentTime = (e.target.value / 1000) * d;
+  seeking = false;
+});
+
+$('#btnPlay').onclick = togglePlay;
+$('#btnBack15').onclick = () => { audio.currentTime = Math.max(0, audio.currentTime - 15); };
+$('#btnFwd15').onclick = () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 15); };
+$('#btnRate').onclick = () => {
+  const rates = [1, 1.25, 1.5, 1.75, 2, 0.8];
+  const i = rates.indexOf(audio.playbackRate);
+  const r = rates[(i + 1) % rates.length];
+  audio.playbackRate = r;
+  localStorage.setItem('nr_rate', String(r));
+  $('#btnRate').textContent = `${r}×`;
+  toast(`播放速度 ${r}×`);
+};
+
+/* 锁屏 / 耳机控制 */
+if ('mediaSession' in navigator){
+  const ms = navigator.mediaSession;
+  ms.setActionHandler('play', () => audio.play());
+  ms.setActionHandler('pause', () => audio.pause());
+  ms.setActionHandler('seekbackward', () => { audio.currentTime = Math.max(0, audio.currentTime - 15); });
+  ms.setActionHandler('seekforward', () => { audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 15); });
+  ms.setActionHandler('seekto', d => { if (d.seekTime != null) audio.currentTime = d.seekTime; });
+  setInterval(() => {
+    if (!state.current || audio.paused) return;
+    try {
+      ms.metadata = new MediaMetadata({
+        title: state.current.title,
+        artist: state.meta?.app_name || 'TNews',
+        album: chapterAt(audio.currentTime)?.title || '',
+      });
+      ms.setPositionState({ duration: audio.duration || 1, position: audio.currentTime, playbackRate: audio.playbackRate });
+    } catch(e){}
+  }, 4000);
+}
+
+/* ---------------- 生成 ---------------- */
+function openSheet(ep){
+  if (state.meta){
+    // 打开面板：默认恢复上次调整的设置；从某一期点进来（ep）则按那一期的参数
+    if (ep) resetGenState(state.selectedProgram, ep);
+    else if (!loadPrefs()) resetGenState(state.selectedProgram, null);
+    renderSheet();
+  }
+  applyRoleUI();
+  if (isAdmin()) loadAdminData();
+  $('#sheet').classList.add('on');
+}
+function closeSheet(){
+  $('#sheet').classList.remove('on');
+}
+$('#btnGen').onclick = () => {
+  // 订阅页（/s/<别人令牌>）：只读，设置与生成一律不开放
+  if (SUB_TOKEN){ toast('订阅页面只能收听，不能生成或修改设置', 3200); return; }
+  openSheet();
+};
+
+/* 快速生成：直接用上次保存的设置生成一期，不打开发置面板 */
+$('#btnQuickGen').onclick = async () => {
+  // 后台生成了新一期还没加载时，闪电变橙 = 点击直接收听最新一期
+  if ($('#btnQuickGen').classList.contains('newep')){
+    $('#btnQuickGen').classList.remove('newep');
+    $('#btnQuickGen').title = '快速生成（沿用上次设置）';
+    await loadEpisodes();
+    if (state.episodes.length) await openEpisode(state.episodes[0].id, true);
+    return;
+  }
+  if (state.generating){ toast('已有生成任务在进行中'); return; }
+  if (SUB_TOKEN){ toast('订阅页面只能收听，不能生成节目', 3200); return; }
+  if (isGuest()){ openAuth('登录后即可生成自己的节目'); return; }
+  if (!state.meta || !state.selectedProgram) return;
+  if (!loadPrefs()) resetGenState(state.selectedProgram, null);
+  const cats = [...state.selectedCats];
+  if (!cats.length){ openSheet(); toast('请先在设置里勾选分类'); return; }
+  const feeds = cats.flatMap(feedsOf).filter(u => state.selectedFeeds.has(u));
+  if (!feeds.length){ openSheet(); toast('请先在设置里勾选源'); return; }
+  const tmin = effectiveTargetMin();
+  if (state.targetMin === 'custom' && !tmin){ openSheet(); toast('请先在设置里填写目标时长'); return; }
+  const pid = state.selectedProgram.id;
+  const sh = collectShares(feeds);
+  const body = { program_id: pid, categories: cats, feeds, rate: state.rate, sort: state.sort, voice: state.voice };
+  if (Object.keys(sh).length) body.shares = sh;
+  if (tmin) body.target_minutes = tmin;
+  if (state.genMode === 'recent'){
+    const h = Math.min(72, Math.max(1, parseInt(state.lookback, 10) || 6));
+    state.lookback = h;
+    body.lookback_hours = h;
+  } else {
+    if (!state.winStart || !state.winEnd){ openSheet(); toast('请先在设置里填写起止时间'); return; }
+    body.window_start = state.winStart;
+    body.window_end = state.winEnd;
+  }
+  state.generating = true;
+  const btn = $('#btnQuickGen');
+  btn.disabled = true;
+  btn.style.opacity = '.45';
+  toast('开始生成最新要闻，约需 1-2 分钟');
+  try {
+    await api('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const r = await pollUntilDone(pid);
+    if (r.ok){
+      toast('新一期已生成');
+      await loadEpisodes();
+      await openEpisode(r.id, true);
+    } else {
+      toast('生成失败：' + (r.err || '未知错误'), 4200);
+    }
+  } catch(e){
+    toast('生成失败：' + (e.detail || e.message || ''), 4200);
+  } finally {
+    state.generating = false;
+    btn.disabled = false;
+    btn.style.opacity = '';
+  }
+};
+
+/* 每 15 秒探测一次：后台（自动更新等）生成了新一期时，闪电变橙提示可刷新 */
+setInterval(async () => {
+  if (!state.meta || state.generating || document.hidden) return;
+  try {
+    const latest = (await api('/api/episodes?limit=1'))[0];
+    const knownTop = state.episodes[0];
+    const hasNew = latest && (!knownTop || latest.id > knownTop.id);
+    const btn = $('#btnQuickGen');
+    if (!btn) return;
+    if (hasNew && !btn.classList.contains('newep')){
+      btn.classList.add('newep');
+      btn.title = `有新一期「${latest.title || ''}」，点击收听`;
+      toast('后台生成了新一期，点右上角闪电收听', 3200);
+    } else if (!hasNew && btn.classList.contains('newep')){
+      btn.classList.remove('newep');
+      btn.title = '快速生成（沿用上次设置）';
+    }
+  } catch(e){}
+}, 15000);
+
+$('#btnBackSheet').onclick = closeSheet;
+$('#btnBackBottom').onclick = closeSheet;
+$('#btnSavePrefs').onclick = () => {
+  savePrefs();
+  toast('设置已保存', 2600);
+};
+$('#btnResetGen').onclick = () => {
+  // 恢复本档节目的默认设置，并清掉记住的上次参数
+  try { prefStore().removeItem(prefKey(prefsKey())); } catch(e){}
+  resetGenState(state.selectedProgram, null);
+  renderSheet();
+  toast('已恢复默认设置');
+};
+document.querySelectorAll('[data-close]').forEach(el => el.onclick = closeSheet);
+
+/* 轮询生成状态，直到完成或失败 */
+function pollUntilDone(pid){
+  const started = Date.now();
+  return new Promise(resolve => {
+    const timer = setInterval(async () => {
+      try {
+        const st = await api('/api/status');
+        const s = st[pid];
+        if (s?.status === 'done'){ clearInterval(timer); resolve({ok:true, id:s.episode_id}); }
+        else if (s?.status === 'error'){ clearInterval(timer); resolve({ok:false, err:s.error}); }
+        else if (Date.now() - started > 300000){ clearInterval(timer); resolve({ok:false, err:'生成超时'}); }
+      } catch(e){}
+    }, 2500);
+  });
+}
+
+$('#btnDoGen').onclick = async () => {
+  if (state.generating) return;
+  if (isGuest()){ closeSheet(); openAuth('登录后即可生成自己的节目'); return; }
+  const cats = [...state.selectedCats];
+  if (!cats.length){ toast('至少选一个分类'); return; }
+  const feeds = cats.flatMap(feedsOf).filter(u => state.selectedFeeds.has(u));
+  if (!feeds.length){ toast('至少勾选一个源'); return; }
+  if (state.genMode === 'custom' && (!state.winStart || !state.winEnd)){
+    toast('请填写起止时间'); return;
+  }
+  const tmin = effectiveTargetMin();
+  if (state.targetMin === 'custom' && !tmin){
+    toast('请填写 2 ~ 120 之间的目标时长'); return;
+  }
+
+  const btn = $('#btnDoGen');
+  state.generating = true;
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner" style="border-color:rgba(0,0,0,.2);border-top-color:#1a1206"></span> 正在生成要闻…';
+  closeSheet();
+  savePrefs();   // 记住这次的设置，下次打开面板默认显示
+  const pid = state.selectedProgram.id;
+  const sh2 = collectShares(feeds);
+  const body = { program_id: pid, categories: cats, feeds, rate: state.rate, sort: state.sort, voice: state.voice };
+  if (Object.keys(sh2).length) body.shares = sh2;
+  if (tmin) body.target_minutes = tmin;
+  if (state.genMode === 'recent'){
+    const h = Math.min(72, Math.max(1, parseInt(state.lookback, 10) || 6));
+    state.lookback = h;
+    body.lookback_hours = h;
+  }
+  else { body.window_start = state.winStart; body.window_end = state.winEnd; }
+
+  try {
+    await api('/api/generate', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    toast('开始生成最新要闻，约需 1-2 分钟');
+    const r = await pollUntilDone(pid);
+    state.generating = false;
+    btn.disabled = false;
+    btn.textContent = '保存并开始生成';
+    if (r.ok){
+      toast('新一期已生成');
+      // 自动更新开着的话，把这次的参数同步过去，下次自动生成沿用手动调好的设置
+      if (state.auto?.enabled){
+        api('/api/auto', {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({
+            enabled: true,
+            interval_hours: state.auto.interval_hours,
+            program_id: pid,
+            categories: cats,
+            feeds,
+            rate: state.rate,
+            target_minutes: tmin,
+            sort: state.sort,
+            voice: state.voice,
+            reschedule: false,
+          })
+        }).then(a => { state.auto = a; updateClock(); }).catch(()=>{});
+      }
+      await loadEpisodes();
+      await openEpisode(r.id, true);
+    } else {
+      toast('生成失败：' + (r.err || '未知错误'), 4200);
+    }
+  } catch(e){
+    state.generating = false;
+    btn.disabled = false;
+    btn.textContent = '保存并开始生成';
+    toast('请求失败：' + (e.detail || ''));
+  }
+};
+
+/* ---------------- 跑步模式生成 ---------------- */
+function runInputs(){
+  const km = parseFloat($('#runKm').value);
+  const min = parseFloat($('#runMin').value);
+  return { km: isFinite(km) && km > 0 ? km : null, min: isFinite(min) && min > 0 ? min : null };
+}
+function updateRunHint(){
+  const {km, min} = runInputs();
+  const el = $('#runHint');
+  if (!el) return;
+  if (!km || !min){
+    el.textContent = '填入距离和预计用时，按你跑步的节奏生成一期新闻，开跑时按下播放，到终点正好收尾';
+    return;
+  }
+  el.innerHTML = `配速 <b>${fmtPace(min * 60 / km)}</b>/km · 将生成约 <b>${Math.round(min)}</b> 分钟的节目`;
+}
+$('#runKm').addEventListener('input', updateRunHint);
+$('#runMin').addEventListener('input', updateRunHint);
+
+/* 记住上次用过的跑步参数（按账号存，跟着账号云同步走）：
+   设置里保存、正式生成时都会写一份，右上角 🏃 一键生成直接复用。 */
+function savedRun(){
+  try {
+    const v = JSON.parse(prefGet('nr_run', 'null') || 'null');
+    const km = v ? parseFloat(v.km) : NaN;
+    const min = v ? parseFloat(v.min) : NaN;
+    if (isFinite(km) && km >= 0.5 && km <= 200 && isFinite(min) && min >= 3 && min <= 360) return { km, min };
+  } catch(e){}
+  return null;
+}
+function rememberRun(km, min){
+  if (km >= 0.5 && km <= 200 && min >= 3 && min <= 360) prefSet('nr_run', JSON.stringify({ km, min }));
+}
+
+/* 真正发起一次跑步生成（km/min 已校验）；btn 只负责「进行中」的视觉状态 */
+async function startRunGeneration(km, min, btn, busyLabel){
+  if (state.generating) return;
+  const pid = state.selectedProgram?.id || state.meta?.programs?.[0]?.id;
+  if (!pid){ toast('没有可用节目'); return; }
+  if (!loadPrefs()) resetGenState(state.selectedProgram || state.meta.programs[0], null);
+  const cats = [...state.selectedCats];
+  if (!cats.length){ openSheet(); toast('至少选一个分类'); return; }
+  const feeds = cats.flatMap(feedsOf).filter(u => state.selectedFeeds.has(u));
+  if (!feeds.length){ openSheet(); toast('至少勾选一个源'); return; }
+  const sh2 = collectShares(feeds);
+  const body = {
+    program_id: pid, categories: cats, feeds, rate: state.rate, sort: state.sort, voice: state.voice,
+    run_km: km, run_minutes: min,
+  };
+  if (Object.keys(sh2).length) body.shares = sh2;
+  if (state.genMode === 'recent'){
+    body.lookback_hours = Math.min(72, Math.max(1, parseInt(state.lookback, 10) || 6));
+  } else {
+    if (!state.winStart || !state.winEnd){ openSheet(); toast('请先在时间范围里填写起止时间'); return; }
+    body.window_start = state.winStart;
+    body.window_end = state.winEnd;
+  }
+  rememberRun(km, min);            // 这次用的参数记下来，下次一键生成直接照做
+  state.generating = true;
+  if (btn){ btn.disabled = true; btn.style.opacity = '.45'; if (busyLabel) btn.textContent = busyLabel; }
+  toast(`开始生成 ${km} km · 配速 ${fmtPace(min * 60 / km)} 的跑步节目，约需 1-2 分钟`);
+  try {
+    await api('/api/generate', {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    const r = await pollUntilDone(pid);
+    if (r.ok){
+      // 生成完毕只提示，不自动播放——跑步通常还没开跑，由用户开跑时手动点播放
+      try { audio.pause(); audio.removeAttribute('src'); } catch(e){}
+      state.current = null;
+      toast('跑步节目已生成，开跑时点播放即可', 3600);
+      await loadEpisodes();
+      await openEpisode(r.id, false);
+    } else {
+      toast('生成失败：' + (r.err || '未知错误'), 4200);
+    }
+  } catch(e){
+    toast('生成失败：' + (e.detail || e.message || ''), 4200);
+  } finally {
+    state.generating = false;
+    if (btn){ btn.disabled = false; btn.style.opacity = ''; if (busyLabel) btn.textContent = '快速生成跑步节目'; }
+  }
+}
+
+$('#btnRunGen').onclick = async () => {
+  if (state.generating) return;
+  if (isGuest()){ closeSheet(); openAuth('登录后即可生成自己的节目'); return; }
+  const {km, min} = runInputs();
+  if (!km || !min){ toast('请填写跑步距离和预计用时'); return; }
+  if (km < 0.5 || km > 200){ toast('距离需在 0.5 ~ 200 公里之间'); return; }
+  if (min < 3 || min > 360){ toast('用时需在 3 ~ 360 分钟之间'); return; }
+  await startRunGeneration(km, min, $('#btnRunGen'), '生成中…');
+};
+
+/* 右上角 🏃：按上次配置的距离/用时一键生成一期（没配置过就提示去设置里填） */
+$('#btnQuickRun').onclick = async () => {
+  if (SUB_TOKEN){ toast('订阅页面只能收听，不能生成节目', 3200); return; }
+  if (isGuest()){ openAuth('登录后即可生成自己的节目'); return; }
+  if (state.generating){ toast('已有生成任务在进行中'); return; }
+  if (!state.meta || !state.selectedProgram){ toast('页面还没准备好，稍后再试'); return; }
+  const rc = savedRun();
+  if (!rc){
+    openSheet();
+    toast('还没配置跑步模式：在「设置 → 跑步模式」填好距离和用时（如 5 公里 / 30 分钟），保存后点这里就能一键生成', 5200);
+    return;
+  }
+  // 把这次要用的参数回填到设置面板里，方便核对 / 微调
+  if ($('#runKm')) $('#runKm').value = rc.km;
+  if ($('#runMin')) $('#runMin').value = rc.min;
+  updateRunHint();
+  await startRunGeneration(rc.km, rc.min, $('#btnQuickRun'));
+};
+
+/* ---------------- 自定义新闻源 ---------------- */
+$('#cfAdd').onclick = async () => {
+  if (isGuest()){ openAuth('登录后才能添加自己的新闻源'); return; }
+  const name = $('#cfName').value.trim();
+  const url = $('#cfUrl').value.trim();
+  const category = $('#cfCat').value;
+  if (!url){ toast('请填写 RSS/Atom 订阅地址'); return; }
+  const btn = $('#cfAdd');
+  btn.disabled = true; btn.textContent = '校验中…';
+  try {
+    await api('/api/custom-feeds', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ name, url, category })
+    });
+    state.meta = await api('/api/meta');   // 刷新源列表
+    state.selectedCats.add(category);
+    state.selectedFeeds.add(url);
+    $('#cfName').value = ''; $('#cfUrl').value = '';
+    renderSheet();
+    toast(`已添加并勾选：${name}`, 3500);
+  } catch(e){
+    toast('添加失败：' + (e.detail || e.message || ''), 5000);
+  } finally {
+    btn.disabled = false; btn.textContent = '添加';
+  }
+};
+
+/* ---------------- 登录 / 注册 / 账号 ---------------- */
+let authMode = 'login';
+
+function openAuth(msg){
+  if (state.user){ renderAccount(); }
+  else { renderAuthForm(); }
+  $('#authHint').textContent = msg || '登录后可生成节目、保存自定义设置';
+  $('#authSheet').classList.add('on');
+}
+function closeAuth(){ $('#authSheet').classList.remove('on'); }
+$('#btnAuthBack').onclick = closeAuth;
+$('#btnUser').onclick = () => openAuth();
+$('#btnGuestLogin').onclick = () => { closeSheet(); openAuth(); };
+document.querySelectorAll('[data-aclose]').forEach(el => el.onclick = closeAuth);
+
+function renderAuthForm(){
+  $('#authTitle').textContent = authMode === 'login' ? '登录' : '注册';
+  $('#authAccountBox').style.display = 'none';
+  $('#authFormBox').style.display = '';
+  $('#btnAuthGo').textContent = authMode === 'login' ? '登录' : '注册';
+  $('#authTabs').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.t === authMode));
+}
+$('#authTabs').querySelectorAll('button').forEach(b => {
+  b.onclick = () => { authMode = b.dataset.t; renderAuthForm(); };
+});
+
+$('#btnAuthGo').onclick = async () => {
+  const email = $('#authEmail').value.trim();
+  const pass = $('#authPass').value;
+  if (!email){ toast('请填写账号'); return; }
+  if (!pass || pass.length < 6){ toast('密码至少 6 位'); return; }
+  const btn = $('#btnAuthGo');
+  btn.disabled = true;
+  btn.textContent = authMode === 'login' ? '登录中…' : '注册中…';
+  try {
+    const r = await api('/api/auth/' + authMode, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ email, password: pass })
+    });
+    localStorage.setItem('nr_token', r.token);
+    if (SUB_TOKEN){
+      // 从订阅页登录：带上令牌回到首页，否则请求还带着 sub，看到的仍是订阅对象的节目
+      toast(`欢迎，${r.user.email}`, 2000);
+      location.href = '/';
+      return;
+    }
+    resetIdentityState();          // 先清上一位账号的播放器/队列/列表，再加载新账号
+    state.user = r.user;
+    applyPrefScope(true);          // 换成新账号的播报偏好（背景音乐/睡眠/播放顺序）
+    closeAuth();
+    toast(`欢迎，${r.user.email}${r.user.role === 'admin' ? '（管理员）' : ''}`, 3000);
+    await loadMeta();
+    await hydratePrefs();          // 先把这个账号之前存的设置全部带出来（换域名/换设备也能恢复）
+    await loadEpisodes();
+    loadWxNow();
+  } catch(e){
+    toast((authMode === 'login' ? '登录失败：' : '注册失败：') + (e.detail || ''), 4200);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = authMode === 'login' ? '登录' : '注册';
+  }
+};
+
+function renderAccount(){
+  $('#authTitle').textContent = '我的账号';
+  $('#authFormBox').style.display = 'none';
+  $('#authAccountBox').style.display = '';
+  $('#authHint').textContent = '生成的节目与自定义新闻源只属于当前账号';
+  $('#acctLine').innerHTML =
+    `<div>用户名：<b>${escapeHtml(state.user.email)}</b>` +
+    (state.user.role === 'admin' ? ' <span class="utag admin">管理员</span>' : '') + `</div>` +
+    `<div>用户ID：<b id="acctUid" style="cursor:pointer;letter-spacing:0.5px" title="外部按账号调用时需要带上这个 ID（点击复制）">${state.user.uid || '—'}</b></div>` +
+    `<div class="asec">
+
+       <div class="asec-head"><span class="alb">速听分享</span><button class="acopy" id="acctSubCopy" disabled>复制地址</button></div>
+       <div class="seg" id="acctSubSeg" style="margin-top:7px"></div>
+     </div>` +
+    `<div class="asec">
+       <div class="asec-head"><span class="alb">播客订阅</span><button class="acopy" id="acctFeedCopy" disabled>复制地址</button></div>
+       <div class="seg" id="acctPodSeg" style="margin-top:7px"></div>
+     </div>` +
+    `<div class="asec">
+       <div class="asec-head"><span class="alb">接口调用</span><button class="acopy" id="acctExtCopy" disabled>复制地址</button></div>
+       <div class="seg" id="acctExtSeg" style="margin-top:7px"></div>
+	   <div class="asec-note" id="acctExtHint"></div>
+     </div>`;
+  const uidEl = $('#acctUid');
+  if (uidEl && state.user.uid){
+    uidEl.onclick = () => copyText(state.user.uid, `已复制用户 ID ${state.user.uid}`, '用户 ID：');
+  }
+  renderMyPodcast();
+  renderMySub();
+  renderMyExt();
+}
+
+/* 自己的「播客订阅」开关：独立开关 + 独立令牌，生成 /feed/<令牌>.xml 只装本账号节目。
+   与「外部订阅」（网页只读收听）互不影响，各自受管理员对应的总开关控制。 */
+async function renderMyPodcast(){
+  let st = { enabled: false, global_enabled: false, feed_url: '' };
+  try { st = await api('/api/me/podcast'); } catch(e){}
+  const seg = $('#acctPodSeg');
+  if (!seg) return;
+  seg.innerHTML = [['0', '关闭'], ['1', '开启']].map(([v, t]) =>
+    `<button data-pd="${v}" class="${(st.enabled ? '1' : '0') === v ? 'on' : ''}">${t}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = async () => {
+      const on = b.dataset.pd === '1';
+      if (on === !!st.enabled) return;
+      try {
+        const r = await api('/api/me/podcast', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: on }),
+        });
+        st = Object.assign({}, st, r);
+        toast(on ? (st.global_enabled ? '播客订阅已开启，地址已生成' : '播客订阅已开启，但管理员总开关未开') : '已关闭播客订阅', 3000);
+      } catch(e){
+        toast('保存失败：' + (e.detail || e.message || ''), 3600);
+      }
+      renderMyPodcast();
+    };
+  });
+
+  const feedBtn = $('#acctFeedCopy');
+  const feedNote = $('#acctFeedNote');
+  const ready = !!(st.enabled && st.feed_url && st.global_enabled);
+  if (feedBtn){
+    feedBtn.disabled = !ready;
+    feedBtn.onclick = ready ? () => copyText(st.feed_url, '已复制播客订阅地址', '播客订阅地址：') : null;
+  }
+  if (feedNote){
+    feedNote.innerHTML = !st.enabled
+      ? '开启后生成专属 RSS 地址，加进小宇宙 / Apple Podcasts'
+      : (st.global_enabled
+          ? '在播客 App 里添加这个地址，只包含本账号的节目'
+          : '管理员总开关未打开，地址暂时无法访问');
+  }
+}
+
+/* 自己的「外部订阅」开关：开启后生成一个只读收听地址（/s/<令牌>），
+   别人打开就能像访客听管理员节目一样听我的节目（功能与访客一致，不能生成/改设置） */
+async function renderMySub(){
+  let st = { enabled: false, global_enabled: false, url: '' };
+  try { st = await api('/api/me/subscribe'); } catch(e){}
+  const seg = $('#acctSubSeg');
+  const hint = $('#acctSubHint');
+  if (!seg) return;
+  seg.innerHTML = [['0', '关闭'], ['1', '开启']].map(([v, t]) =>
+    `<button data-sb="${v}" class="${(st.enabled ? '1' : '0') === v ? 'on' : ''}">${t}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = async () => {
+      const on = b.dataset.sb === '1';
+      if (on === !!st.enabled) return;
+      try {
+        const r = await api('/api/me/subscribe', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: on }),
+        });
+        st = Object.assign({}, st, r);
+        toast(on ? (st.global_enabled ? '已开启速听分享，地址已生成' : '已开启速听分享，但管理员全局未开') : '已关闭速听分享', 3000);
+      } catch(e){
+        toast('保存失败：' + (e.detail || e.message || ''), 3600);
+      }
+      renderMySub();
+    };
+  });
+
+  // 速听分享：网页收听地址（不摊开显示，只给复制按钮）
+  const subBtn = $('#acctSubCopy');
+  if (subBtn){
+    const ready = !!(st.enabled && st.url && st.global_enabled);
+    subBtn.disabled = !ready;
+    subBtn.onclick = ready ? () => copyText(st.url, '已复制速听分享地址', '速听分享地址：') : null;
+  }
+
+  if (!hint) return;
+  if (!st.enabled){
+    hint.innerHTML = '速听分享：已关闭';
+  } else {
+    hint.innerHTML = (st.global_enabled
+      ? '速听分享：已开启'
+      : '速听分享：已开启，但管理员全局未开，地址暂时无法访问');
+  }
+}
+
+/* 自己的「外部」分开关：用户可以在我的账号里自助开关（管理员控制总开关） */
+async function renderMyExt(){
+  let st = { enabled: false, global_enabled: false };
+  try { st = await api('/api/me/external'); } catch(e){}
+  const seg = $('#acctExtSeg');
+  const hint = $('#acctExtHint');
+  if (!seg) return;
+  seg.innerHTML = [['0', '关闭'], ['1', '开启']].map(([v, t]) =>
+    `<button data-mx="${v}" class="${(st.enabled ? '1' : '0') === v ? 'on' : ''}">${t}</button>`).join('');
+  seg.querySelectorAll('button').forEach(b => {
+    b.onclick = async () => {
+      const on = b.dataset.mx === '1';
+      if (on === !!st.enabled) return;
+      try {
+        const r = await api('/api/me/external', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: on }),
+        });
+        st = Object.assign({}, st, r);
+        toast(on ? '已开启接口调用' : '已关闭接口调用', 2000);
+      } catch(e){
+        toast('保存失败：' + (e.detail || e.message || ''), 3600);
+      }
+      renderMyExt();
+    };
+  });
+  if (!hint) return;
+  const extUrl = (st.urls && st.urls.latest)
+    || (location.origin + '/api/latest?user=' + encodeURIComponent(st.account || state.user.email)
+        + '&id=' + encodeURIComponent(st.uid || state.user.uid || ''));
+  const extBtn = $('#acctExtCopy');
+  if (extBtn){
+    const ready = !!(st.enabled && st.global_enabled);
+    extBtn.disabled = !ready;
+    extBtn.onclick = ready ? () => copyText(extUrl, '已复制接口调用地址', '接口调用地址：') : null;
+  }
+  hint.innerHTML = !st.enabled
+    ? ''
+    : (st.global_enabled
+        ? ''
+        : '');
+}
+
+$('#btnLogout').onclick = async () => {
+  try { await api('/api/auth/logout', { method: 'POST' }); } catch(e){}
+  localStorage.removeItem('nr_token');
+  resetIdentityState();          // 退出即停播、清空节目与队列，访客看到的是访客内容
+  state.user = null;
+  applyPrefScope(true);          // 回到访客偏好（sessionStorage，本次会话独立的设置）
+  closeAuth();
+  toast('已退出登录，当前为访客模式');
+  await loadMeta();
+  await loadEpisodes();
+  loadWxNow();   // 访客：清掉天气 pill
+};
+
+/* ---------------- 管理员：保留天数 / 清除 / 用户管理 ---------------- */
+let retention = null;
+async function loadAdminData(){
+  if (!isAdmin()) return;
+  try { renderRetention(await api('/api/retention')); } catch(e){}
+  try { renderUsers(await api('/api/admin/users')); } catch(e){}
+}
+
+function renderRetention(r){
+  retention = r;
+  $('#retState').innerHTML = `<span style="color:var(--accent)">${r.days === 0 ? '永久保留' : `保留 ${r.days} 天`}</span>`;
+  const seg = $('#retSeg');
+  seg.innerHTML = r.choices.map(d =>
+    `<div class="chip ${r.days === d ? 'on' : ''}" data-days="${d}">${d === 0 ? '永久' : d + ' 天'}</div>`).join('');
+  seg.querySelectorAll('.chip').forEach(el => {
+    el.onclick = async () => {
+      const d = parseInt(el.dataset.days, 10);
+      try {
+        const nr = await api('/api/retention', {
+          method: 'POST', headers: {'Content-Type':'application/json'},
+          body: JSON.stringify({ days: d })
+        });
+        renderRetention(nr);
+        toast(d === 0 ? '已设为永久保留' : `往期节目保留 ${d} 天`);
+      } catch(e){ toast('设置失败：' + (e.detail || '')); }
+    };
+  });
+}
+
+let clearArmed = false, clearTimer = null;
+$('#btnClearEps').onclick = async () => {
+  const btn = $('#btnClearEps');
+  if (!clearArmed){
+    clearArmed = true;
+    btn.textContent = '⚠ 再点一次确认清除（不可恢复）';
+    clearTimer = setTimeout(() => { clearArmed = false; btn.textContent = '清除全部往期节目'; }, 6000);
+    return;
+  }
+  clearTimeout(clearTimer); clearArmed = false;
+  btn.textContent = '清除全部往期节目';
+  btn.disabled = true;
+  try {
+    const r = await api('/api/episodes/clear', { method: 'POST' });
+    toast(`已清除 ${r.removed} 期节目`);
+    state.current = null;
+    audio.removeAttribute('src');
+    await loadEpisodes();
+  } catch(e){ toast('清除失败：' + (e.detail || '')); }
+  finally { btn.disabled = false; }
+};
+
+function renderUsers(users){
+  $('#userCount').textContent = `共 ${users.length} 人`;
+  $('#userList').innerHTML = users.map(u => `
+    <div class="urow">
+      <div class="em">${escapeHtml(u.email)}</div>
+      <span class="utag uid" data-uid="${u.uid || ''}" title="6 位用户 ID，外部按账号调用时需要（点击复制）">ID ${u.uid || '—'}</span>
+      <span class="utag ${u.role === 'admin' ? 'admin' : ''}">${u.role === 'admin' ? '管理员' : '用户'}</span>
+      ${u.disabled ? '<span class="utag off">已禁用</span>' : ''}
+      <span class="utag">${u.episodes} 期</span>
+      <div class="ops">
+        <button data-act="sub" data-id="${u.id}" data-v="${u.subscribe ? '0' : '1'}" class="${u.subscribe ? '' : 'mute'}" title="开启后该账号可用自己的 /s/令牌 地址被外部只读收听（还需总开关开启）">分享${u.subscribe ? '开' : '关'}</button>
+        <button data-act="pod" data-id="${u.id}" data-v="${u.podcast ? '0' : '1'}" class="${u.podcast ? '' : 'mute'}" title="开启后该账号可用自己的 /feed/令牌.xml 播客地址被外部订阅（还需「允许播客订阅」总开关开启）">播客${u.podcast ? '开' : '关'}</button>
+        <button data-act="ext" data-id="${u.id}" data-v="${u.external ? '0' : '1'}" class="${u.external ? '' : 'mute'}" title="允许外部系统调取该账号接口（还需总开关开启）">接口${u.external ? '开' : '关'}</button>
+        <button data-act="pw" data-id="${u.id}">改密码</button>
+        <button data-act="dis" data-id="${u.id}" data-v="${u.disabled ? '0' : '1'}">${u.disabled ? '启用' : '禁用'}</button>
+        <button data-act="del" data-id="${u.id}" class="danger">删除</button>
+      </div>
+    </div>`).join('');
+  $('#userList').querySelectorAll('button[data-act]').forEach(b => {
+    b.onclick = () => userAction(b.dataset.act, parseInt(b.dataset.id, 10), b.dataset.v);
+  });
+  $('#userList').querySelectorAll('.utag.uid').forEach(t => {
+    t.onclick = () => {
+      const v = t.dataset.uid;
+      if (!v) return;
+      copyText(v, `已复制用户 ID ${v}`, `用户 ID：`);
+    };
+  });
+}
+
+async function userAction(act, id, v){
+  let users = [];
+  try { users = await api('/api/admin/users'); } catch(e){ return; }
+  const u = users.find(x => x.id === id);
+  const patch = (body) => api(`/api/admin/users/${id}`, {
+    method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify(body)
+  });
+  try {
+    if (act === 'account'){
+      const em = prompt('新的账号（2~30 个字符，不含空格）：', u ? u.email : '');
+      if (!em || em === (u && u.email)) return;
+      await patch({ email: em });
+      toast('账号已更新');
+    } else if (act === 'pw'){
+      const pw = prompt(`为 ${u ? u.email : '该用户'} 设置新密码（至少 6 位）：`);
+      if (!pw) return;
+      if (pw.length < 6){ toast('密码至少 6 位'); return; }
+      await patch({ password: pw });
+      toast('密码已更新');
+    } else if (act === 'dis'){
+      await patch({ disabled: v === '1' });
+      toast(v === '1' ? '该账号已被禁用' : '该账号已启用');
+    } else if (act === 'sub'){
+      await patch({ subscribe: v === '1' });
+      toast(v === '1'
+        ? `已开启 ${u ? u.email : ''} 的速听分享（总开关也需开启）`
+        : `已关闭 ${u ? u.email : ''} 的速听分享`);
+    } else if (act === 'pod'){
+      await patch({ podcast: v === '1' });
+      toast(v === '1'
+        ? `已开启 ${u ? u.email : ''} 的播客订阅（总开关也需开启）`
+        : `已关闭 ${u ? u.email : ''} 的播客订阅`);
+    } else if (act === 'ext'){
+      await patch({ external: v === '1' });
+      toast(v === '1'
+        ? `已开启 ${u ? u.email : ''} 的接口调用（总开关也需开启）`
+        : `已关闭 ${u ? u.email : ''} 的接口调用`);
+    } else if (act === 'del'){
+      if (!confirm(`确定删除用户 ${u ? u.email : ''}？其生成的节目将一并删除，不可恢复。`)) return;
+      await api(`/api/admin/users/${id}`, { method: 'DELETE' });
+      toast('用户已删除');
+    }
+    loadAdminData();
+  } catch(e){ toast('操作失败：' + (e.detail || '')); }
+}
+
+document.addEventListener('keydown', e => {
+  if (e.code === 'Space' && !/INPUT|TEXTAREA/.test(e.target.tagName)){
+    e.preventDefault(); togglePlay();
+  }
+  if (e.code === 'ArrowLeft') audio.currentTime = Math.max(0, audio.currentTime - 15);
+  if (e.code === 'ArrowRight') audio.currentTime = Math.min(audio.duration || 0, audio.currentTime + 15);
+});
+
+/* ---------------- 启动 ---------------- */
+(async function init(){
+  try {
+    await loadMeta();
+    if (SUB_TOKEN){
+      // 订阅模式：不读本机账号设置、不触发自动生成，只当访客收听
+      const sub = state.meta.sub || {};
+      if (!sub.enabled && sub.error) toast(sub.error, 5000);
+    } else {
+      await hydratePrefs();          // 已登录（带令牌）进入：补齐账号存档里的设置
+      try {
+        const ens = await api('/api/ensure', { method: 'POST' });
+        if (ens.generating) state.preparing = true;
+      } catch(e){}
+    }
+    await loadEpisodes();
+    loadWxNow();   // 首页常驻天气条（不阻塞首屏）
+    if (state.preparing){
+      render();
+      toast('正在准备最新一期，约 1-2 分钟');
+      const pid = state.meta.programs[0].id;
+      const r = await pollUntilDone(pid);
+      state.preparing = false;
+      if (r.ok){
+        await loadEpisodes();
+        toast('今日要闻已就绪');
+      } else {
+        render();
+        toast('自动生成失败：' + (r.err || ''), 4200);
+      }
+    }
+  } catch(e){
+    $('#content').innerHTML = `<div class="empty"><h3>服务连接失败</h3><p>${e.message || ''}</p></div>`;
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+services:
+  tnews:
+    build: .
+    image: tnews:latest
+    container_name: tnews
+    restart: always
+    ports:
+      - "18282:18282"
+    environment:
+      - TZ=Asia/Shanghai
+      # 想让文稿更口语化就填一个大模型 key（OpenAI 兼容接口）
+      # - LLM_API_KEY=sk-xxxxxxxx
+    volumes:
+      # 节目数据库 + 音频文件，删容器不丢
+      - ./data:/app/data
+      # 改完配置后执行 docker compose restart 生效
+      - ./config.yaml:/app/config.yaml:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request;urllib.request.urlopen('http://127.0.0.1:18282/health', timeout=4)"]
+      interval: 60s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

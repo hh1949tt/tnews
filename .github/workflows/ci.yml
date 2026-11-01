@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: 安装依赖
+        run: pip install -r requirements.txt
+
+      - name: 语法检查
+        run: python -m compileall -q app
+
+      - name: 导入检查（会建一个空数据库）
+        env:
+          TNEWS_DB: ${{ runner.temp }}/ci.db
+          TNEWS_DATA: ${{ runner.temp }}
+        run: python -c "import app.main; print('version', app.main.VERSION)"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: 校验 Node-RED flow
+        run: node tools/check_flow.cjs
+
+      - name: 校验 JSON / YAML 可解析
+        run: |
+          python -c "import json,yaml,sys; json.load(open('extras/nodered-tnews-flow.json')); yaml.safe_load(open('config.yaml')); print('ok')"

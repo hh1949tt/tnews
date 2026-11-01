@@ -1,0 +1,15 @@
+# 统一换行：仓库里存 LF，Windows 检出时按需转换
+* text=auto eol=lf
+
+*.py    text
+*.md    text
+*.yaml  text
+*.yml   text
+*.json  text
+*.html  text
+*.cjs   text
+
+*.png   binary
+*.mp3   binary
+*.zip   binary
+*.gz    binary
