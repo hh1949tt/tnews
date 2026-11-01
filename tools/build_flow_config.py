@@ -1,7 +1,7 @@
 # 把 Node-RED flow 的服务地址 / 账号 / HA token / 实体 ID 统一收敛到一个「⚙️ 统一配置」节点
 import json, pathlib
 
-P = pathlib.Path("extras/nodered-tnews-flow.json")
+P = pathlib.Path("extras/ha-nodered-tnews-flow.json")
 nodes = json.loads(P.read_text(encoding="utf-8"))
 by_id = {n.get("id"): n for n in nodes}
 

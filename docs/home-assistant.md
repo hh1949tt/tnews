@@ -89,7 +89,7 @@ automation:
 
 ## Node-RED 联动小米音箱
 
-小米音箱播网络音频时**默认单曲循环**，「播完自动停」只能由外部按时长掐断。仓库自带一份可直接导入的 flow：`extras/nodered-tnews-flow.json`。
+小米音箱播网络音频时**默认单曲循环**，「播完自动停」只能由外部按时长掐断。仓库自带一份可直接导入的 flow：`extras/ha-nodered-tnews-flow.json`。
 
 flow 能做五件事：
 
@@ -114,7 +114,7 @@ HA → 设置 → 设备与服务 → 辅助元素 → 新建：
 
 ### 导入与配置
 
-Node-RED → 菜单 → 导入 → 选 `extras/nodered-tnews-flow.json`。
+Node-RED → 菜单 → 导入 → 选 `extras/ha-nodered-tnews-flow.json`。
 
 **只改一个节点：「⚙️ 统一配置（只改这里：地址/账号/令牌/实体）」**
 
