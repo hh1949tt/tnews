@@ -15,6 +15,28 @@
 
 一台机器上跑起来只需要三样东西：项目文件、`Dockerfile`、`docker-compose.yml`。项目文件有两种拿法，**服务器上没有 git 就用第二种**，效果完全一样。
 
+### 1.0 直接用现成镜像（不用构建，最快）
+
+每个 `v*` 标签推送后，GitHub Actions 会自动构建多架构镜像（amd64 + arm64，树莓派可用）并发布到 GHCR。仓库里的 `docker-compose.yml` 默认就指向这个镜像，所以只要 compose 文件和 `config.yaml` 在位：
+
+```bash
+mkdir -p /opt/tnews && cd /opt/tnews
+# 只需要 docker-compose.yml 和 config.yaml 两个文件（可从 Release 包里取）
+cp .env.example .env        # 可选
+docker compose pull && docker compose up -d
+```
+
+或者干脆不写 compose：
+
+```bash
+docker run -d --name tnews --restart always -p 18282:18282 \
+  -v /opt/tnews/data:/app/data \
+  -v /opt/tnews/config.yaml:/app/config.yaml:ro \
+  ghcr.io/hh1949tt/tnews:latest
+```
+
+镜像标签规则：`v1.0.1` → `1.0.1`、`1.0`、`latest` 三个标签同时更新。首次从 GHCR 拉取需要在 https://github.com/hh1949tt/tnews/pkgs/container/tnews 把 Package 可见性设为 Public（跟随仓库，一般首次发布时自动继承），私有仓库则先 `docker login ghcr.io`。
+
 ### 1.1 用 git 拉取
 
 ```bash
@@ -104,7 +126,7 @@ mkdir -p data
 docker compose up -d
 ```
 
-> ARM 设备（树莓派、部分 ARM NAS）要在**同架构**机器上构建，或手动交叉构建：
+> ARM 设备（树莓派、部分 ARM NAS）不用自己交叉构建：GHCR 上的镜像自带 arm64 版本（见 1.0），`docker compose pull` 即可。只有离线搬运时才需要在同架构机器上构建，或手动交叉构建：
 > `docker buildx build --platform linux/arm64 -t tnews:latest --load .`
 > 架构不匹配时容器会起不来，日志报 `exec format error`。
 

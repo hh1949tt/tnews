@@ -23,4 +23,3 @@
 - 多用户账号体系与权限区分；速听分享、播客订阅源（`/feed.xml`）、外部调用接口
 - 首页访客可配置（可指向任意账号的公开节目）、全局管理与版本更新提示
 - Docker / Docker Compose、裸机、群晖与飞牛 fnOS 部署，Home Assistant 与 Node-RED 集成
-

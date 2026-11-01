@@ -98,6 +98,8 @@ tar --exclude=data --exclude=__pycache__ --exclude='*.pyc' \
 
 6. 在 GitHub 的 Release 里把上面的包挂成附件（`dist/` 已被 gitignore，上传靠网页或 `gh release upload`）。这样没有 git 的机器可以直接下载解压部署，见[部署 · 手动下载压缩包](deployment.md#12-手动下载压缩包没有-git或不想装-git)。
 
+7. **Docker 镜像自动发布**：推 `v*` 标签会触发 `.github/workflows/docker.yml`，自动构建 amd64 + arm64 镜像并推到 GHCR（`ghcr.io/<owner>/<repo>`，标签 `1.0.1` / `1.0` / `latest`）。不用配置任何 Secret（用的是仓库自带的 `GITHUB_TOKEN`）。首次发布后到仓库 Packages 页把镜像可见性设为 Public。想给某个 commit 出测试镜像，在 Actions 页手动 Run workflow 即可。
+
 ## 仓库可见性：私有还是公开
 
 GitHub 没有「公开但只我看得见」这种档位，只有 **public** 和 **private**（private 里只有你和你邀请的协作者能看）。所以「上架后仅自己可见」就是建一个**私有仓库**。
