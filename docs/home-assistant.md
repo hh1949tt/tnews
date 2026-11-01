@@ -91,14 +91,15 @@ automation:
 
 小米音箱播网络音频时**默认单曲循环**，「播完自动停」只能由外部按时长掐断。仓库自带一份可直接导入的 flow：`extras/nodered-tnews-flow.json`。
 
-flow 能做四件事：
+flow 能做五件事：
 
 1. 每 5 分钟拉 `/api/latest`（或 `/api/latest/content`），把标题/直链写进 `input_text`，全文写进 `sensor` 属性；
 2. 点 `input_button.tnews_play` 播放最新一期：用 `/audio/xxx.mp3?inline=1` 直链（避开 302 与 `attachment` 头导致的循环拉流）；
-3. 按本期 `duration` 减 0.8 秒计时，到点 `media_player.media_pause` 掐断循环；重复点击会重置计时；
-4. 暂停失败时兜底 `media_play_pause`（小米 `play_control` 没有 `media_stop`），播放失败只记日志、不动音箱。
+3. 点 `input_button.tnews_stop` 立即暂停，并撤掉这次播放排的自动暂停计时；
+4. 按本期 `duration` 减 0.8 秒计时，到点 `media_player.media_pause` 掐断循环；重复点击会重置计时；
+5. 暂停失败时兜底 `media_play_pause`（小米 `play_control` 没有 `media_stop`），播放失败只记日志、不动音箱。
 
-### 准备：3 个辅助元素
+### 准备：4 个辅助元素
 
 HA → 设置 → 设备与服务 → 辅助元素 → 新建：
 
@@ -107,6 +108,7 @@ HA → 设置 → 设备与服务 → 辅助元素 → 新建：
 | 文本 | `input_text.tnews_title` | 存最新一期标题 |
 | 文本 | `input_text.tnews_url` | 存音频直链（排障用） |
 | 按钮 | `input_button.tnews_play` | 点一下播放 |
+| 按钮 | `input_button.tnews_stop` | 点一下暂停（同时撤掉这次播放排的自动暂停计时） |
 
 （可选）再加一个 `input_text.tnews_content` 存 255 字摘要——不需要就把 flow 里那条支线删掉。
 
@@ -125,6 +127,8 @@ Node-RED → 菜单 → 导入 → 选 `extras/nodered-tnews-flow.json`。
 | `program_id` | 只看某一档节目时填 `morning`，留空 = 该账号全部节目里最新一期 |
 | `ha` / `ha_token` | HA 地址 + 长期访问令牌（HA → 头像 → 安全 → 长期访问令牌） |
 | `player` / `input_*` / `sensor` | 实体 ID，HA 里改过名才需要动 |
+| `media_type` | 播放通道，默认 `music`；叮一声没声音就改 `url`（见踩坑 7） |
+| `play_prefix` | 播放专用地址前缀，如 `http://192.168.2.6:18282`；留空 = 用 `base` |
 
 令牌**原样粘进引号**，不要加 `Bearer`、不要换行。填的仍是占位符时，节点会提示「ha_token 还没换成真实令牌」并跳过全文写入（摘要照常）。
 
@@ -133,7 +137,28 @@ Node-RED → 菜单 → 导入 → 选 `extras/nodered-tnews-flow.json`。
 ### 仪表盘
 
 - 标题：Markdown 卡片 `## {{ states('input_text.tnews_title') }}`
-- 播放按钮：Button 卡片，`tap_action` → `perform-action` → `input_button.press` → `input_button.tnews_play`
+- 播放 / 暂停按钮：两个 Button 卡片，`tap_action` → `perform-action` → `input_button.press`，实体分别选 `input_button.tnews_play` 和 `input_button.tnews_stop`
+
+```yaml
+type: horizontal-stack
+cards:
+  - type: button
+    name: 播放
+    icon: mdi:play
+    tap_action:
+      action: perform-action
+      perform_action: input_button.press
+      target: { entity_id: input_button.tnews_play }
+  - type: button
+    name: 暂停
+    icon: mdi:pause
+    tap_action:
+      action: perform-action
+      perform_action: input_button.press
+      target: { entity_id: input_button.tnews_stop }
+```
+
+暂停是「先撤计时、再 `media_pause`」：不撤计时的话，手动停了以后那个定时器到点还会再调一次 pause，而 pause 对已暂停的设备可能报错，兜底又是切换式的 `media_play_pause`，一翻就把节目又放出来。
 - 全文卡片：
 
 ```yaml
@@ -181,7 +206,7 @@ msg.payload = {
 };
 ```
 
-flow 里的「组装 play_media」已经按新格式输出，并在最外层和 `data` 里各留了一份 `entity_id`，新旧节点都能跑。对应地，播放/暂停/兜底三个服务节点的 **Block input overrides 必须不勾**——勾上等于丢弃 `msg.payload`，`target` 传不进去。
+flow 里的「组装 play_media」已经按新格式输出。对应地，播放/暂停/兜底三个服务节点的 **Block input overrides 必须不勾**——勾上等于丢弃 `msg.payload`，`target` 传不进去。
 
 **3. `catch` 带下来的脏参数**
 
@@ -198,3 +223,37 @@ flow 里的「组装 play_media」已经按新格式输出，并在最外层和 
 **6. `Content-Disposition: attachment` 导致反复拉流**
 
 默认音频地址带这个头，部分小米固件会反复重新拉流（看着也像循环）。播放地址加 `?inline=1` 改成内联流式即可。
+
+**7. 叮一声之后没声音（实体停在 paused）**
+
+这是小爱音箱最常见的一类「假成功」：服务调用没报错，音箱也「叮」了一下，然后什么都没放，`media_player.*_play_control` 停在 `paused`。
+
+原因是 miot auto 的 `play_media` 有**两条完全不同的通道**，走哪条只由 `media_content_type` 决定（见 [media_player.py](https://github.com/al-one/hass-xiaomi-miot/blob/master/custom_components/xiaomi_miot/media_player.py)）：
+
+| `media_content_type` | 实际调用 | 适用 |
+|---|---|---|
+| `music` / `audio` / `mp3` / `tts` / `audio/*` | 小米云端「音乐」接口 `player_play_music` | 多数型号可用；部分型号会「叮完就停」 |
+| 其它任意值（如 `url`） | 「直链播放」接口 `player_play_url` | 小爱音箱 Play、OH2P 等只认直链的型号 |
+
+flow 的「⚙️ 统一配置」里 `media_type` 就是这一项，默认 `music`；**叮完没声音就把它改成 `'url'`**，重新部署再试一次。两种都不行时，才是网络或固件问题（往下看）。
+
+排查顺序（照做，3 分钟能定位）：
+
+1. 开发者工具 → 动作 → `media_player.play_media`，YAML 模式填：
+
+   ```yaml
+   action: media_player.play_media
+   target:
+     entity_id: media_player.xiaomi_oh2p_5b29_play_control
+   data:
+     media_content_id: http://192.168.2.6:18282/audio/你的文件名.mp3?inline=1
+     media_content_type: url      # ← 只改这一行，music / url 各试一次
+   ```
+
+2. 两条通道都无声 → 换个公网、443 端口的 mp3（如 `https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3`）。
+   - 这个能放 → 是音箱取不到你的地址：音箱和 NAS 不在同一网段 / 路由器开了 AP 隔离 / 域名要走公网回环。把配置里的 `play_prefix` 填成 NAS 的局域网地址（如 `http://192.168.2.6:18282`），只让「播放」走内网，网页和播客不受影响。
+   - 这个也不能放 → 是音箱或集成本身：重载 Xiaomi Miot Auto 集成、重新登录小米账号，再确认型号是否支持 URL 播放。
+
+3. 还有一层容易忽略：实体音量。`media_player.volume_set` 之后看 `volume_level` 有没有变，没变说明控制通道也没通。
+
+`?inline=1` 必须留着（见坑 6），`play_prefix` 只会替换 `http://域名:端口` 这一段，路径和参数不动。
