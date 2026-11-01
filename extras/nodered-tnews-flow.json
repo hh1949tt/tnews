@@ -1,17 +1,17 @@
 [
     {
-        "id": "tn_tab",
+        "id": "tnews",
         "type": "tab",
         "label": "TNews 新闻播报",
         "disabled": false,
-        "info": "TNews → Home Assistant / 小米音箱\n\n1) 每 5 分钟拉取 /api/latest，把标题和音频地址写进 input_text 实体（仪表盘可直接显示）\n2) 播放地址自动带 ?inline=1（内联流式，规避 attachment 头引起的循环拉流）\n3) 按下 input_button.tnews_play：play_media 播放最新一期 → 时长 -0.8 秒（提前量，避免单曲循环重播）自动 media_pause（小米 play_control 不支持 media_stop）\n4) media_pause 失败 → catch → 清理脏参数 → media_player.media_play_pause（切换式）兜底\n5) 播放失败只记日志、不动音箱（避免误把正在放的内容关掉）\n6) 【完整内容支线】每 5 分钟拉取 /api/latest/content，拼成 Markdown 全文写进 sensor.tnews_content 的 content 属性（REST API 直写，无 255 字限制）→ 仪表盘 Markdown 卡片用 state_attr('sensor.tnews_content','content') 显示完整新闻；同一条消息还带了 list 属性（- 标题 简版清单）\n\n★ 导入后只需要改一个节点：「⚙️ 统一配置（只改这里：地址/账号/令牌/实体）」\n   里面按顺序填：\n   ① base       TNews 服务地址（NAS 的局域网 IP:18282，别用 localhost）\n   ② token / user + pin   账号鉴权任选一种；都留空 = 访客\n      program_id          只看某一档节目时填，如 morning\n   ③ ha / ha_token        Home Assistant 地址 + 长期访问令牌\n   ④ player / input_* / sensor   实体 ID（HA 里改过名才需要动）\n   改完点右上角「部署」，下一轮抓取（≤5 分钟）自动生效。\n\n   唯一还需要在节点属性里选的：各节点右上角的 Server 下拉（选你自己的 Home Assistant 实例），\n   这个属于 Node-RED 与 HA 的连接配置，没法写进 flow。\n"
+        "info": "TNews → Home Assistant / 小米音箱\n\n1) 每 5 分钟拉取 /api/latest，把标题和音频地址写进 input_text 实体（仪表盘可直接显示）\n2) 播放地址自动带 ?inline=1（内联流式，规避 attachment 头引起的循环拉流）\n3) 按下 input_button.tnews_play：play_media 播放最新一期 → 时长 -0.8 秒（提前量，避免单曲循环重播）自动 media_pause（小米 play_control 不支持 media_stop）\n3.1) 按下 input_button.tnews_stop：立即暂停，并撤销上面那条「到点自动暂停」的定时\n     （不撤的话，手动停完那个定时器还会到点再 pause 一次，容易触发「切换式」兜底把节目又放出来）\n4) media_pause 失败 → catch → 清理脏参数 → media_player.media_play_pause（切换式）兜底\n5) 播放失败只记日志、不动音箱（避免误把正在放的内容关掉）\n6) 【完整内容支线】每 5 分钟拉取 /api/latest/content，拼成 Markdown 全文写进 sensor.tnews_content 的 content 属性（REST API 直写，无 255 字限制）→ 仪表盘 Markdown 卡片用 state_attr('sensor.tnews_content','content') 显示完整新闻；同一条消息还带了 list 属性（- 标题 简版清单）\n\n★ 导入后只需要改一个节点：「⚙️ 统一配置（只改这里：地址/账号/令牌/实体）」\n   里面按顺序填：\n   ① base       TNews 服务地址（NAS 的局域网 IP:18282，别用 localhost）\n   ② token / user + pin   账号鉴权任选一种；都留空 = 访客\n      program_id          只看某一档节目时填，如 morning\n   ③ ha / ha_token        Home Assistant 地址 + 长期访问令牌\n   ④ player / input_* / sensor   实体 ID（HA 里改过名才需要动）\n   改完点右上角「部署」，下一轮抓取（≤5 分钟）自动生效。\n\n   唯一还需要在节点属性里选的：各节点右上角的 Server 下拉（选你自己的 Home Assistant 实例），\n   这个属于 Node-RED 与 HA 的连接配置，没法写进 flow。\n"
     },
     {
         "id": "tn_cfg",
         "type": "function",
         "z": "tnews",
         "name": "⚙️ 统一配置（只改这里：地址/账号/令牌/实体）",
-        "func": "// ════════════════════════════════════════════════════════════════\n//  ⚙️ 统一配置：整条 flow 只改这一个节点，别的地方都不用动\n//  改完点右上角「部署」，下一轮抓取（≤5 分钟）自动生效\n// ════════════════════════════════════════════════════════════════\nconst CONFIG = {\n    // ① TNews 服务地址：NAS 的局域网 IP + 端口\n    //    不要用 localhost / 127.0.0.1——Node-RED 在 Docker 里，那样访问的是容器自己\n    base: 'http://192.168.1.100:18282',\n\n    // ② 账号鉴权（按顺序生效，推荐第 1 种）：\n    //    ext   = 外部调用令牌：网页「我的账号 → 外部调用」里点「复制地址」，\n    //            把地址里 ext= 后面那一串填到这里（管理员需先开「允许外部按账号调用」总开关）\n    //    token = 登录口令（网页登录后下发的那种）\n    //    user + pin = 账号名 + 6 位用户 ID（老方式，也能用）\n    //    都留空 = 访客视角（只看公共节目）\n    ext: '',\n    token: '',\n    user: '',\n    pin: '',\n    // ③ 只看某一档节目时填 program_id（如 'morning'），留空 = 该账号全部节目里最新的一期\n    program_id: '',\n\n    // ④ Home Assistant 地址 + 长期访问令牌\n    //    令牌：HA → 左下角头像 → 安全 → 页面最底部「长期访问令牌」→ 创建令牌\n    ha: 'http://homeassistant.local:8123',\n    ha_token: '在此粘贴长期访问令牌',\n\n    // ⑤ 实体 ID（在 HA 里改过名就改这里）\n    player: 'media_player.xiaomi_speaker',\n    input_title: 'input_text.tnews_title',\n    input_url: 'input_text.tnews_url',\n    input_brief: 'input_text.tnews_content',\n    sensor: 'sensor.tnews_content'\n};\n\nCONFIG.base = String(CONFIG.base || '').trim().replace(/\\/+$/, '');\nCONFIG.ha = String(CONFIG.ha || '').trim().replace(/\\/+$/, '');\n\n// 拼鉴权参数：ext（外部调用令牌）优先，其次 token，再次 user + id，最后 program_id\nconst q = [];\nconst add = (k, v) => {\n    const s = (v === undefined || v === null) ? '' : String(v).trim();\n    if (s) q.push(k + '=' + encodeURIComponent(s));\n};\nif (CONFIG.ext) {\n    add('ext', CONFIG.ext);\n} else if (CONFIG.token) {\n    add('token', CONFIG.token);\n} else {\n    add('user', CONFIG.user);\n    add('id', CONFIG.pin);\n}\nadd('program_id', CONFIG.program_id);\nconst query = q.length ? ('?' + q.join('&')) : '';\n\n// 两个 inject 用 topic 区分：latest = 标题/地址；content = 全文\nconst isContent = String(msg.topic || '').toLowerCase() === 'content';\nmsg.url = CONFIG.base + (isContent ? '/api/latest/content' : '/api/latest') + query;\n\n// 存起来给下游各节点用（播放器实体、HA 地址、令牌、sensor 名等）\nflow.set('tncfg', CONFIG);\nglobal.set('tncfg', CONFIG);\nmsg.tncfg = CONFIG;\n\nconst who = CONFIG.ext ? '外部令牌' : (CONFIG.token ? '口令' : (CONFIG.user ? CONFIG.user : '访客'));\nnode.status({ fill: 'green', shape: 'dot', text: who + ' · ' + (isContent ? 'content' : 'latest') });\n\n// 两路分开走：第 1 口 → /api/latest，第 2 口 → /api/latest/content\nreturn [isContent ? null : msg, isContent ? msg : null];\n",
+        "func": "// ════════════════════════════════════════════════════════════════\n//  ⚙️ 统一配置：整条 flow 只改这一个节点，别的地方都不用动\n//  改完点右上角「部署」，下一轮抓取（≤5 分钟）自动生效\n// ════════════════════════════════════════════════════════════════\nconst CONFIG = {\n    // ① TNews 服务地址：NAS 的局域网 IP + 端口\n    //    不要用 localhost / 127.0.0.1——Node-RED 在 Docker 里，那样访问的是容器自己\n    base: 'http://192.168.1.100:18282',\n\n    // ② 账号鉴权（按顺序生效，推荐第 1 种）：\n    //    ext   = 外部调用令牌：网页「我的账号 → 外部调用」里点「复制地址」，\n    //            把地址里 ext= 后面那一串填到这里（管理员需先开「允许外部按账号调用」总开关）\n    //    token = 登录口令（网页登录后下发的那种）\n    //    user + pin = 账号名 + 6 位用户 ID（老方式，也能用）\n    //    都留空 = 访客视角（只看公共节目）\n    ext: '',\n    token: '',\n    user: '',\n    pin: '',\n    // ③ 只看某一档节目时填 program_id（如 'morning'），留空 = 该账号全部节目里最新的一期\n    program_id: '',\n\n    // ④ Home Assistant 地址 + 长期访问令牌\n    //    令牌：HA → 左下角头像 → 安全 → 页面最底部「长期访问令牌」→ 创建令牌\n    ha: 'http://homeassistant.local:8123',\n    ha_token: '在此粘贴长期访问令牌',\n\n    // ⑤ 实体 ID（在 HA 里改过名就改这里）\n    player: 'media_player.xiaomi_speaker',\n\n    // ⑥ 播放方式（传给 HA 的 media_content_type）\n    //    'music' = 走小米云端「音乐」接口（player_play_music），默认，多数型号可用\n    //    'url'   = 走「直链播放」接口（player_play_url），小爱音箱 Play / OH2P 一类\n    //              只认直链的型号用它（症状：叮一声后没声音、实体停在 paused）\n    //    两种都试不出来时，最后才考虑 'audio/mpeg'\n    media_type: 'music',\n\n    // ⑦ 播放专用地址前缀（可选）\n    //    留空 = 播放地址用 ① 的 base（域名/外网）\n    //    填 'http://192.168.2.6:18282' = 音箱改走局域网直连拉流，网页/播客/API 仍走 base\n    //    适用：音箱在局域网、但域名要走公网 NAT 回环（部分路由器不支持）的情况\n    play_prefix: '',\n    input_title: 'input_text.tnews_title',\n    input_url: 'input_text.tnews_url',\n    input_brief: 'input_text.tnews_content',\n    sensor: 'sensor.tnews_content'\n};\n\nCONFIG.base = String(CONFIG.base || '').trim().replace(/\\/+$/, '');\nCONFIG.ha = String(CONFIG.ha || '').trim().replace(/\\/+$/, '');\n\n// 拼鉴权参数：ext（外部调用令牌）优先，其次 token，再次 user + id，最后 program_id\nconst q = [];\nconst add = (k, v) => {\n    const s = (v === undefined || v === null) ? '' : String(v).trim();\n    if (s) q.push(k + '=' + encodeURIComponent(s));\n};\nif (CONFIG.ext) {\n    add('ext', CONFIG.ext);\n} else if (CONFIG.token) {\n    add('token', CONFIG.token);\n} else {\n    add('user', CONFIG.user);\n    add('id', CONFIG.pin);\n}\nadd('program_id', CONFIG.program_id);\nconst query = q.length ? ('?' + q.join('&')) : '';\n\n// 两个 inject 用 topic 区分：latest = 标题/地址；content = 全文\nconst isContent = String(msg.topic || '').toLowerCase() === 'content';\nmsg.url = CONFIG.base + (isContent ? '/api/latest/content' : '/api/latest') + query;\n\n// 存起来给下游各节点用（播放器实体、HA 地址、令牌、sensor 名等）\nflow.set('tncfg', CONFIG);\nglobal.set('tncfg', CONFIG);\nmsg.tncfg = CONFIG;\n\nconst who = CONFIG.ext ? '外部令牌' : (CONFIG.token ? '口令' : (CONFIG.user ? CONFIG.user : '访客'));\nnode.status({ fill: 'green', shape: 'dot', text: who + ' · ' + (isContent ? 'content' : 'latest') });\n\n// 两路分开走：第 1 口 → /api/latest，第 2 口 → /api/latest/content\nreturn [isContent ? null : msg, isContent ? msg : null];\n",
         "outputs": 2,
         "timeout": 0,
         "noerr": 0,
@@ -219,7 +219,7 @@
         "type": "function",
         "z": "tnews",
         "name": "组装 play_media（直链 + 时长）",
-        "func": "const t = global.get('tnews');\nif (!t || !t.url) {\n    node.warn('还没有最新一期，等抓取节点跑一次');\n    return null;\n}\nconst cfg = global.get('tncfg') || {};\nconst PLAYER = cfg.player || 'media_player.xiaomi_speaker';\nconst durMs = Math.max(30, Number(t.duration) || 0) * 1000;\nconst stream = t.url + (t.url.includes('?') ? '&' : '?') + 'inline=1';  // 内联流式，避免 302 与 attachment 头导致反复拉流\n// 提前量：在音频结束【之前】就暂停。\n// 原来用 dur + 5 秒缓冲，结果第一遍播完后设备单曲循环、从头又放 5 秒才被掐掉，\n// 听感上就是「明明结束了又重播一句」。改成提前 LEAD_MS 停，宁可少 0.8 秒尾巴。\n// 如果某台设备起播很慢（听到被提前掐掉），把 LEAD_MS 调大到 1500~2000。\nconst LEAD_MS = 800;\nconst waitMs = Math.max(5000, durMs - LEAD_MS);\n// 关键：新版 api-call-service 只认 payload.target.entity_id（数组），\n// 把 entity_id 放在 payload 顶层会被忽略，HA 报 \"at least one of [...] is required\"。\nmsg.payload = {\n    entity_id: PLAYER,                        // 老版本兼容\n    target: { entity_id: [PLAYER] },          // 新版节点真正读取的位置\n    data: {\n        entity_id: PLAYER,                    // 再兜一层：老 HA 服务数据也认\n        media_content_id: stream,\n        media_content_type: 'music'\n    }\n};\nmsg.wait = String(waitMs);\nmsg.tncfg = cfg;                              // 下游 api-call-service 用 {{{tncfg.player}}}\nglobal.set('tnewsWait', waitMs);              // 供计时节点使用（不依赖消息透传）\nnode.status({ fill: 'blue', shape: 'dot', text: (t.title || '') + ' · ' + Math.round(durMs / 1000) + 's，' + (waitMs / 1000).toFixed(1) + 's 后暂停' });\nreturn msg;\n",
+        "func": "const t = global.get('tnews');\nif (!t || !t.url) {\n    node.warn('还没有最新一期，等抓取节点跑一次');\n    return null;\n}\nconst cfg = global.get('tncfg') || {};\nconst PLAYER = cfg.player || 'media_player.xiaomi_speaker';\nconst durMs = Math.max(30, Number(t.duration) || 0) * 1000;\nconst cb = global.get('tncfg') || {};\n// 播放地址：① 的 base 换成 ⑦ 的 play_prefix（填了的话），其余保持不变\nlet playUrl = t.url;\nif (cb.play_prefix) {\n    const pref = String(cb.play_prefix).trim().replace(/\\/+$/, '');\n    playUrl = playUrl.replace(/^https?:\\/\\/[^/?#]+/, pref);\n}\nconst stream = playUrl + (playUrl.includes('?') ? '&' : '?') + 'inline=1';  // 内联流式，避免 302 与 attachment 头导致反复拉流\nconst MEDIA_TYPE = String(cb.media_type || 'music').trim() || 'music';\n// 提前量：在音频结束【之前】就暂停。\n// 原来用 dur + 5 秒缓冲，结果第一遍播完后设备单曲循环、从头又放 5 秒才被掐掉，\n// 听感上就是「明明结束了又重播一句」。改成提前 LEAD_MS 停，宁可少 0.8 秒尾巴。\n// 如果某台设备起播很慢（听到被提前掐掉），把 LEAD_MS 调大到 1500~2000。\nconst LEAD_MS = 800;\nconst waitMs = Math.max(5000, durMs - LEAD_MS);\n// 关键：新版 api-call-service 只认 payload.target.entity_id（数组），\n// 把 entity_id 放在 payload 顶层会被忽略，HA 报 \"at least one of [...] is required\"。\nmsg.payload = {\n    target: { entity_id: [PLAYER] },          // 新版节点真正读取的位置\n    data: {\n        media_content_id: stream,\n        media_content_type: MEDIA_TYPE\n    }\n};\nmsg.wait = String(waitMs);\nmsg.tncfg = cfg;                              // 下游 api-call-service 用 {{{tncfg.player}}}\nglobal.set('tnewsWait', waitMs);              // 供计时节点使用（不依赖消息透传）\nnode.status({ fill: 'blue', shape: 'dot', text: (t.title || '') + ' · ' + Math.round(durMs / 1000) + 's，' + (waitMs / 1000).toFixed(1) + 's 后暂停' });\nreturn msg;\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
@@ -267,12 +267,12 @@
         "type": "function",
         "z": "tnews",
         "name": "按本期时长计时（重复点击重置）",
-        "func": "// 按本期时长计时，到点发出暂停消息；重复点击会重置计时（不会出现旧定时把新播放掐掉）\nconst cfg = global.get('tncfg') || {};\nconst PLAYER = cfg.player || 'media_player.xiaomi_speaker';\nconst wait = Number(global.get('tnewsWait') || (msg && msg.wait) || 0);\nif (!wait) {\n    node.warn('没拿到本期时长，跳过自动暂停');\n    return null;\n}\nconst prev = context.get('timer');\nif (prev) {\n    clearTimeout(prev);\n    node.status({ fill: 'yellow', shape: 'ring', text: '重新计时' });\n}\nconst timer = setTimeout(function () {\n    context.set('timer', null);\n    node.send({ payload: { entity_id: PLAYER, target: { entity_id: [PLAYER] } }, tncfg: cfg });\n}, wait);\ncontext.set('timer', timer);\nnode.status({ fill: 'blue', shape: 'dot', text: Math.round(wait / 1000) + ' 秒后暂停' });\nreturn null;\n",
+        "func": "// 按本期时长计时，到点发出暂停消息；重复点击会重置计时（不会出现旧定时把新播放掐掉）\nconst cfg = global.get('tncfg') || {};\nconst PLAYER = cfg.player || 'media_player.xiaomi_speaker';\nconst wait = Number(global.get('tnewsWait') || (msg && msg.wait) || 0);\nif (!wait) {\n    node.warn('没拿到本期时长，跳过自动暂停');\n    return null;\n}\n// 定时器存在 flow 上下文：手动点「暂停键」时也要能 clearTimeout（节点自己的 context 别的节点读不到）\nconst prev = flow.get('tnAutoPause');\nif (prev) {\n    clearTimeout(prev);\n    node.status({ fill: 'yellow', shape: 'ring', text: '重新计时' });\n}\nconst timer = setTimeout(function () {\n    flow.set('tnAutoPause', null);\n    node.send({ payload: { entity_id: PLAYER, target: { entity_id: [PLAYER] } }, tncfg: cfg });\n}, wait);\nflow.set('tnAutoPause', timer);\nnode.status({ fill: 'blue', shape: 'dot', text: Math.round(wait / 1000) + ' 秒后暂停' });\nreturn null;\n",
         "outputs": 1,
         "timeout": 0,
         "noerr": 0,
         "initialize": "",
-        "finalize": "const t = context.get('timer');\nif (t) clearTimeout(t);",
+        "finalize": "const t = flow.get('tnAutoPause');\nif (t) clearTimeout(t);\nflow.set('tnAutoPause', null);",
         "libs": [],
         "x": 990,
         "y": 260,
@@ -286,7 +286,7 @@
         "id": "tn_stop2",
         "type": "api-call-service",
         "z": "tnews",
-        "name": "到时暂停（防循环）",
+        "name": "暂停（到时 / 手动）",
         "server": "",
         "version": 5,
         "debugenabled": true,
@@ -302,8 +302,8 @@
         "outputProperties": [],
         "queue": "none",
         "blockInputOverrides": false,
-        "x": 1290,
-        "y": 260,
+        "x": 790,
+        "y": 340,
         "wires": [
             [
                 "tn_dbg2"
@@ -323,8 +323,8 @@
         "targetType": "full",
         "statusVal": "",
         "statusType": "auto",
-        "x": 1900,
-        "y": 260,
+        "x": 1030,
+        "y": 340,
         "wires": []
     },
     {
@@ -605,5 +605,63 @@
         "x": 1450,
         "y": 560,
         "wires": []
+    },
+    {
+        "id": "tn_stopbtn",
+        "type": "server-state-changed",
+        "z": "tnews",
+        "name": "按下「暂停键」",
+        "server": "",
+        "version": 6,
+        "outputs": 1,
+        "exposeAsEntityConfig": "",
+        "entities": {
+            "entity": [
+                "input_button.tnews_stop"
+            ],
+            "substring": [],
+            "regex": []
+        },
+        "outputInitially": false,
+        "stateType": "str",
+        "ifState": "",
+        "ifStateType": "str",
+        "ifStateOperator": "is",
+        "outputOnlyOnStateChange": false,
+        "for": "",
+        "forType": "num",
+        "ignorePrevStateNull": false,
+        "ignorePrevStateUnknown": false,
+        "ignorePrevStateUnavailable": false,
+        "ignoreCurrentStateUnknown": false,
+        "ignoreCurrentStateUnavailable": false,
+        "outputProperties": [],
+        "x": 170,
+        "y": 340,
+        "wires": [
+            [
+                "tn_stopreq"
+            ]
+        ]
+    },
+    {
+        "id": "tn_stopreq",
+        "type": "function",
+        "z": "tnews",
+        "name": "撤销自动暂停计时 + 组装暂停",
+        "func": "// 「暂停键」：先撤掉这次播放排的自动暂停定时，再把暂停指令交给下游的 media_pause\n// 不撤的话：手动停了以后，之前那个定时器还会到点再调一次 pause；\n// 而 pause 对已暂停的设备可能报错，catch 兜底是「切换播放/暂停」，一翻就把节目又放出来了。\nconst cfg = global.get('tncfg') || {};\nconst PLAYER = cfg.player || 'media_player.xiaomi_speaker';\nconst timer = flow.get('tnAutoPause');\nif (timer) {\n    clearTimeout(timer);\n    flow.set('tnAutoPause', null);\n    node.status({ fill: 'blue', shape: 'dot', text: '已撤销自动暂停计时' });\n} else {\n    node.status({ fill: 'blue', shape: 'dot', text: '手动暂停' });\n}\nmsg.payload = {\n    entity_id: PLAYER,\n    target: { entity_id: [PLAYER] }\n};\nmsg.tncfg = cfg;\nreturn msg;\n",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 470,
+        "y": 340,
+        "wires": [
+            [
+                "tn_stop2"
+            ]
+        ]
     }
 ]
