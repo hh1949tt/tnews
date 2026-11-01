@@ -284,7 +284,13 @@ async def generate_episode(
                 log.info("[%s] 未指定条数，源占比按默认 %d 条分配", program.id, max_items)
             buckets, uncapped = _apply_shares(buckets, opts.shares, int(max_items))
             hit = {u: p for u, p in opts.shares.items() if p}
-            log.info("[%s] 源占比生效：%s", program.id, hit)
+            if uncapped:
+                log.info("[%s] 源占比生效：%s", program.id, hit)
+            else:
+                log.warning(
+                    "[%s] 源占比一个都没生效（请求带占比但 url 与实际抓到的源不匹配）：%s",
+                    program.id, hit,
+                )
 
         # 今日天气：不写进正片，单独合成一条当日音频（前端当日首次播放时前置；
         # 当天已有就直接复用，没有就现场补一条——最新一期可能是昨天生成的）
