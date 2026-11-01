@@ -38,4 +38,4 @@ jobs:
 
       - name: 校验 JSON / YAML 可解析
         run: |
-          python -c "import json,yaml,sys; json.load(open('extras/nodered-tnews-flow.json')); yaml.safe_load(open('config.yaml')); print('ok')"
+          python -c "import json,yaml,sys; json.load(open('extras/ha-nodered-tnews-flow.json')); yaml.safe_load(open('config.yaml')); print('ok')"

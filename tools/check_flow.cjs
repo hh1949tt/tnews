@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const file = path.join(__dirname, '..', 'extras', 'nodered-tnews-flow.json');
+const file = path.join(__dirname, '..', 'extras', 'ha-nodered-tnews-flow.json');
 const nodes = JSON.parse(fs.readFileSync(file, 'utf8'));
 
 let bad = 0;
