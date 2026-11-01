@@ -37,7 +37,7 @@ docker compose up -d --build
 
 ```bash
 mkdir -p /opt/tnews && cd /opt/tnews
-wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.0.tar.gz
+wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.1.tar.gz
 tar -xzf tnews.tar.gz --strip-components=1
 docker compose up -d --build
 ```

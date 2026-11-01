@@ -84,8 +84,8 @@ sqlite3 data/tnews.db "select key,value from settings where key like 'u1:%' limi
 4. 打 tag 并推送：
 
 ```bash
-git add -A && git commit -m "release: v1.0.0"
-git tag v1.0.0 && git push origin main --tags
+git add -A && git commit -m "release: v1.0.1"
+git tag v1.0.1 && git push origin main --tags
 ```
 
 5. 需要「覆盖式更新包」给不方便 git 的用户（排除 `data/`）：

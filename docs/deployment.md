@@ -26,9 +26,9 @@ docker compose up -d --build
 
 ### 1.2 手动下载压缩包（没有 git、或不想装 git）
 
-在电脑上下载 Release 里的 `tnews-<版本>.zip` / `.tar.gz`，上传到服务器解压即可。也可以在服务器上直接下（把 `v1.0.0` 和账号换成实际值）：
+在电脑上下载 Release 里的 `tnews-<版本>.zip` / `.tar.gz`，上传到服务器解压即可。也可以在服务器上直接下（把 `v1.0.1` 和账号换成实际值）：
 
-> 仓库还没打 tag 时，把 `refs/tags/v1.0.0` 换成 `refs/heads/main`，或者在网页上 **Code → Download ZIP**。归档包里不含 `data/`、`dist/`、`.env`，正好就是部署需要的那些文件。
+> 仓库还没打 tag 时，把 `refs/tags/v1.0.1` 换成 `refs/heads/main`，或者在网页上 **Code → Download ZIP**。归档包里不含 `data/`、`dist/`、`.env`，正好就是部署需要的那些文件。
 
 > **仓库是私有的？** 上面这些地址都要登录，NAS 上 `wget` 会返回 404。改成「本机打包再传」：
 >
@@ -46,12 +46,12 @@ docker compose up -d --build
 mkdir -p /opt/tnews && cd /opt/tnews
 
 # 下载并解压（二选一）
-wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.0.tar.gz
+wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.1.tar.gz
 tar -xzf tnews.tar.gz --strip-components=1
 
 # 或者从本地上传后解压
-# scp tnews-1.0.0.tar.gz user@服务器:/opt/tnews/
-# tar -xzf tnews-1.0.0.tar.gz
+# scp tnews-1.0.1.tar.gz user@服务器:/opt/tnews/
+# tar -xzf tnews-1.0.1.tar.gz
 
 cp .env.example .env        # 可选
 docker compose up -d --build
@@ -73,9 +73,9 @@ docker compose up -d --build
 几个容易踩的点：
 
 - **别把 `data/` 一起打包上传**。它是运行数据（数据库 + 音频），覆盖会丢节目；新机器上让它自己生成。
-- 压缩包若带一层目录（如 `tnews-1.0.0/`），要么用 `--strip-components=1` 拆掉，要么 `cd` 进去再 `docker compose up`；`docker-compose.yml` 里的 `build: .` 指的是**当前目录**，目录不对会报 `failed to read Dockerfile`。
+- 压缩包若带一层目录（如 `tnews-1.0.1/`），要么用 `--strip-components=1` 拆掉，要么 `cd` 进去再 `docker compose up`；`docker-compose.yml` 里的 `build: .` 指的是**当前目录**，目录不对会报 `failed to read Dockerfile`。
 - Windows 上解压后拷到 Linux 会带上 CRLF，`docker compose` 会报 `env file ... contains invalid characters`——用 `dos2unix .env` 或编辑器切回 LF。
-- Windows 本地解压：`Expand-Archive tnews-1.0.0.zip -DestinationPath C:\tnews`，再整体拷到服务器；`config.yaml` / `.env` 别用记事本改（会存成带 BOM 的 UTF-8），用 VS Code 存「UTF-8 无 BOM」。
+- Windows 本地解压：`Expand-Archive tnews-1.0.1.zip -DestinationPath C:\tnews`，再整体拷到服务器；`config.yaml` / `.env` 别用记事本改（会存成带 BOM 的 UTF-8），用 VS Code 存「UTF-8 无 BOM」。
 - 手动部署的升级就是「下载新包 → 覆盖 `app/ web/ config.yaml Dockerfile requirements.txt`（保留 `data/`）→ `docker compose up -d --build`」，见[升级](#升级)。
 
 ### 1.3 在别的机器上构建，把镜像拷过去

@@ -2,6 +2,18 @@
 
 本项目版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，更新记录按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式维护。
 
+## [1.0.1] - 2026-11-02
+
+### 修复
+
+- 打开首页超过 6 小时的自动补录（`/api/ensure`）生成时不带账号保存的「源占比」，补出来的期不按占比分配——点 ⚡ 快速生成听到的最新一期正是这期，表现为「占比失效」。现在补录、自动更新、定点定时都会取账号云同步的最新占比
+- 自动更新设置里未单独存占比时，回退使用账号最新保存的占比（与定点定时行为一致）
+- 请求带了占比但没有任何源命中时，服务端记录 warning，便于发现源地址不匹配类问题
+
+### 变更
+
+- Home Assistant / Node-RED flow 文件更名为 `extras/ha-nodered-tnews-flow.json`；flow 新增暂停键（`input_button.tnews_stop`）、播放方式（`media_type`）与播放直链前缀（`play_prefix`）配置项
+
 ## [1.0.0] - 2026-11-01
 
 首个公开版本。
