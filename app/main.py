@@ -341,20 +341,14 @@ async def _run_generation(program_id: str, opts: GenOptions | None = None):
         }
 
 
-def _admin_gen_shares(program_id: str) -> dict[str, int] | None:
-    """读管理员账号云同步的生成设置（nr_gen_<节目>），取「源占比」给定点定时用。
+def _user_gen_shares(uid: int, program_id: str) -> dict[str, int] | None:
+    """读某个账号云同步的生成设置（nr_gen_<节目>），取「源占比」。
 
     前端每次改设置都会把 nr_gen_* 快照同步到 u<uid>:prefs（/api/me/prefs），
-    所以定时生成不用管理员重新开启自动更新也能拿到最新的占比。
+    所以打开页面自动补录、自动更新、定点定时都不用重新保存设置，
+    就能拿到该账号最新的占比。没存过 / 占比为空 → None（不参考）。
     """
-    admin = next(
-        (u for u in store.list_users()
-         if u.get("role") == "admin" and not u.get("disabled")),
-        None,
-    )
-    if not admin:
-        return None
-    prefs = store.get_setting(f"u{int(admin['id'])}:prefs") or {}
+    prefs = store.get_setting(f"u{int(uid)}:prefs") or {}
     prefs = prefs.get("prefs") if isinstance(prefs, dict) and "prefs" in prefs else prefs
     raw = (prefs or {}).get(f"nr_gen_{program_id}")
     try:
@@ -372,6 +366,18 @@ def _admin_gen_shares(program_id: str) -> dict[str, int] | None:
         if 0 < p <= 100:
             clean[str(u)] = p
     return clean or None
+
+
+def _admin_gen_shares(program_id: str) -> dict[str, int] | None:
+    """读管理员账号云同步的生成设置（nr_gen_<节目>），取「源占比」给定点定时用。"""
+    admin = next(
+        (u for u in store.list_users()
+         if u.get("role") == "admin" and not u.get("disabled")),
+        None,
+    )
+    if not admin:
+        return None
+    return _user_gen_shares(int(admin["id"]), program_id)
 
 
 def _scheduled_job(program_id: str):
@@ -466,7 +472,8 @@ async def _run_auto(uid: int) -> None:
     opts = GenOptions(
         categories=data.get("categories") or None,
         feeds=data.get("feeds") or None,
-        shares=data.get("shares") or None,
+        # 自动更新设置里没存占比时，回退到该账号最新的生成设置占比（与补录/定点定时一致）
+        shares=data.get("shares") or _user_gen_shares(uid, program.id),
         rate=data.get("rate") or None,
         target_minutes=data.get("target_minutes") or None,
         sort=data.get("sort") or None,
@@ -921,7 +928,12 @@ async def ensure(background: BackgroundTasks, request: Request, program_id: str 
         except ValueError:
             pass
 
-    background.add_task(_run_generation, program.id, GenOptions(user_id=uid))
+    # 补录也遵循该账号保存的「源占比」：否则打开首页补出来的那期永远不按占比，
+    # 用户点闪电一听「占比没生效」，其实占比根本没传进来
+    background.add_task(
+        _run_generation, program.id,
+        GenOptions(user_id=uid, shares=_user_gen_shares(uid, program.id)),
+    )
     return {"generating": True, "program_id": program.id}
 
 
