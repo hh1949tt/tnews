@@ -708,7 +708,7 @@ main{padding:16px 16px 8px;max-width:720px;margin:0 auto}
               <button id="cfAdd">添加</button>
             </div>
             <div class="sumline">支持任何标准 RSS / Atom 订阅地址（XML 里有 &lt;rss&gt; 或 &lt;feed&gt;），添加时会自动校验是否可访问、格式是否正确</div>
-            <div class="sumline">每个源右侧可填<b>生成占比</b>（%）：填 50 表示本期约一半条数来自该源；留空不参考。源内条目不够占比时按实际条数计，其余名额分给未设占比的源</div>
+            <div class="sumline">每个源右侧可填<b>生成占比</b>（%）：填 50 表示本期约一半条数来自该源；留空不参考。源内条目不够占比时按实际条数计，其余名额分给未设占比的源。比例算出来不足 1 条时<b>保底 1 条</b>（一条都不想要就取消勾选该源）</div>
           </div>
         </div>
       </div>

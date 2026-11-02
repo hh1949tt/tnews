@@ -254,9 +254,11 @@ async def collect(
     async with httpx.AsyncClient(timeout=timeout, headers={"User-Agent": UA}) as client:
         tasks = []
         for name, url, cat in feed_plan:
-            # weibo:// 是内置特殊源（非 RSS），走单独的 JSON 接口
+            # weibo:// 是内置特殊源（非 RSS），走单独的 JSON 接口。
+            # 必须把配置里的 url 传进去：Item.feed_url 要能对得上配置，
+            # 否则后台按占比裁剪时会认为"配置的源一条都没抓到"，占比静默失效。
             tasks.append(
-                fetch_weibo_hot(client, name, cat)
+                fetch_weibo_hot(client, name, cat, url)
                 if url.startswith("weibo://")
                 else fetch_feed(client, name, url, cat)
             )

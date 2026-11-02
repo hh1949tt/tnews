@@ -125,7 +125,14 @@ def _norm_feed(url: str) -> str:
     """
     s = str(url or "").strip()
     s = re.sub(r"^https?://", "", s, flags=re.I)
-    return s.rstrip("/").lower()
+    s = s.rstrip("/").lower()
+    # 内置伪协议源：早期版本抓微博热榜时 Item.feed_url 被写死成 weibo://hot，
+    # 而配置里是 weibo://hot-search，两边对不上导致占比失效。统一按 scheme 归一，
+    # 让旧存档 / 旧数据里这两种写法都能命中同一个源。
+    m = re.match(r"^([a-z][a-z0-9+.-]*)://", s)
+    if m and m.group(1) not in ("http", "https"):
+        return f"{m.group(1)}://"
+    return s
 
 
 def _apply_shares(
