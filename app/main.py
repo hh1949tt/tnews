@@ -542,13 +542,16 @@ def _user_gen_options(
     没存过的项（值为空）自动回退到账号存档，避免「只设了占比，其它全默认」。
     """
     snap = _prefs_snapshot(uid, program_id)
-    src = dict(snap)
-    for k, v in (base or {}).items():
-        # 空值视为「面板没设」，继续沿用账号存档里的；否则会把手动调好的设置盖成默认
-        if v is None or v == "" or v == [] or v == {}:
-            continue
-        src[k] = v
-    fields = _snapshot_fields(src)
+    snap_fields = _snapshot_fields(snap)
+    # 空值视为「面板没设」，不参与合并
+    base_fields = _snapshot_fields(
+        {k: v for k, v in (base or {}).items() if v not in (None, "", [], {})}
+    )
+    # 优先级：设置面板的最新快照 > 自动更新里那份参数副本 > 默认值。
+    # auto_update 里的 categories/feeds/rate/target_minutes/sort/voice 只是「上次点保存时
+    # 抓的一份副本」，用户之后在设置面板改（尤其只点「仅保存」不触发同步），
+    # 若让副本优先，就会永久压住新值——表现为「改了目标时长/分类/音色，自动更新还按老的跑」。
+    fields = {**base_fields, **snap_fields}
 
     # 安全网：分类与源对不上时（改了分类但存档里还是旧源、自定义源被删等），
     # 只保留两者都还存在的源；一个都不剩就放开源限制，免得生成出空节目。
@@ -572,9 +575,11 @@ def _user_gen_options(
             )
             fields.pop("feeds", None)
 
-    shares = _norm_shares((base or {}).get("shares"))
+    # 占比同样以账号存档为准（存档里的最新一份 → 服务端记住的上次实际占比 → 其他账号），
+    # 都没有才退回自动更新里那份旧副本
+    shares = _user_gen_shares(uid, program_id, others=others)
     if not shares:
-        shares = _user_gen_shares(uid, program_id, others=others)
+        shares = _norm_shares((base or {}).get("shares"))
 
     opts = GenOptions(
         **fields,
@@ -1194,6 +1199,8 @@ async def generate(req: GenerateReq, background: BackgroundTasks, user: dict = D
             raise HTTPException(400, "用时需在 3 ~ 360 分钟之间")
         opts.run_km = float(req.run_km)
         opts.target_minutes = float(req.run_minutes)
+    elif req.target_minutes is not None and not (2 <= req.target_minutes <= 240):
+        raise HTTPException(400, "目标时长需在 2 ~ 240 分钟之间")
 
     if req.lookback_hours:
         if not (0.5 <= req.lookback_hours <= 168):
@@ -1439,28 +1446,36 @@ async def set_auto(req: AutoReq, user: dict = Depends(require_user)):
             raise HTTPException(400, "节目配置不存在")
         data["program_id"] = req.program_id
 
-    if req.categories:
-        valid = [c for c in req.categories if c in cfg.categories]
-        if not valid:
-            raise HTTPException(400, "分类无效")
-        data["categories"] = valid
-    if req.feeds:
-        data["feeds"] = req.feeds
-    if req.shares is not None:
+    # 只处理请求里「显式带了」的字段：没带的保持原值（兼容老前端），
+    # 显式传 null / 空表示「跟随设置面板」——清掉副本，避免旧值一直压着新设置。
+    explicit = set(req.model_fields_set)
+
+    if "categories" in explicit:
+        valid = [c for c in (req.categories or []) if c in cfg.categories]
+        data["categories"] = valid or None
+    if "feeds" in explicit:
+        data["feeds"] = [str(u) for u in (req.feeds or []) if str(u).strip()] or None
+    if "shares" in explicit:
         # 只保留 1~100 的合法占比，空值/非法值视为不参考
-        data["shares"] = {u: int(p) for u, p in req.shares.items() if 0 < int(p) <= 100} or None
+        data["shares"] = {
+            u: int(p) for u, p in (req.shares or {}).items()
+            if str(p).isdigit() and 0 < int(p) <= 100
+        } or None
         remember_gen_shares(int(user["id"]), str(data.get("program_id") or ""), data["shares"])
-    if req.rate:
-        data["rate"] = req.rate
-    if req.target_minutes is not None:
-        if not (2 <= req.target_minutes <= 120):
-            raise HTTPException(400, "目标时长需在 2 ~ 120 分钟之间")
-        data["target_minutes"] = float(req.target_minutes)
-    if req.sort is not None:
-        if req.sort not in summarizer.SORTS:
+    if "rate" in explicit:
+        data["rate"] = req.rate or None
+    if "target_minutes" in explicit:
+        if req.target_minutes is None:
+            data["target_minutes"] = None       # 跟随设置面板
+        else:
+            if not (2 <= req.target_minutes <= 120):
+                raise HTTPException(400, "目标时长需在 2 ~ 120 分钟之间")
+            data["target_minutes"] = float(req.target_minutes)
+    if "sort" in explicit:
+        if req.sort and req.sort not in summarizer.SORTS:
             raise HTTPException(400, "排序方式无效")
-        data["sort"] = req.sort
-    if req.voice is not None:
+        data["sort"] = req.sort or None
+    if "voice" in explicit:
         if req.voice and req.voice not in VOICES:
             raise HTTPException(400, "不支持的音色")
         data["voice"] = req.voice or None
@@ -2084,25 +2099,45 @@ async def admin_gen_options(program_id: str = "", user: dict = Depends(require_a
     uid = int(admin["id"]) if admin else int(user["id"])
     snap = _prefs_snapshot(uid, pid)
     opts = _user_gen_options(uid, pid, hours=_gen_gap_hours(pid, uid))
+    auto_data = _get_auto(uid)
+
+    def brief(o: GenOptions) -> dict:
+        return {
+            "categories": o.categories,
+            "feeds": len(o.feeds) if o.feeds else None,
+            "rate": o.rate,
+            "sort": o.sort,
+            "voice": o.voice,
+            "target_minutes": o.target_minutes,
+            "max_items": o.max_items,
+            "shares": o.shares,
+            "lookback_hours": o.lookback_hours,
+            "user_id": o.user_id,
+        }
+
+    # 三条后台路径各自实际会用的参数：有出入时一眼能看出是哪条路径取错了值。
+    # 正常情况三者应当完全一致（都以账号快照为准）。
+    paths = {
+        "scheduled": brief(opts),      # 定点定时
+        "ensure": brief(opts),         # 首页自动补录（与定点定时同一入口）
+        "auto_update": brief(
+            _user_gen_options(
+                uid, pid, base=auto_data,
+                hours=float(auto_data.get("interval_hours") or 6), owner=uid,
+            )
+        ),
+    }
+    same = paths["scheduled"] == paths["auto_update"]
     return {
         "program_id": pid,
         "account": (admin or user).get("email"),
         "uid": uid,
         "snapshot_found": bool(snap),
         "snapshot_keys": sorted(snap.keys()),
-        "options": {
-            "categories": opts.categories,
-            "feeds": len(opts.feeds) if opts.feeds else None,
-            "rate": opts.rate,
-            "sort": opts.sort,
-            "voice": opts.voice,
-            "target_minutes": opts.target_minutes,
-            "max_items": opts.max_items,
-            "shares": opts.shares,
-            "lookback_hours": opts.lookback_hours,
-            "user_id": opts.user_id,
-        },
-        "auto": _get_auto(uid),
+        "options": brief(opts),
+        "paths": paths,
+        "paths_consistent": same,
+        "auto": auto_data,
     }
 
 

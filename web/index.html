@@ -2160,6 +2160,41 @@ function savePrefs(){
     const min = parseFloat($('#runMin')?.value);
     if (isFinite(km) && isFinite(min)) rememberRun(km, min);
   } catch(e){}
+  syncAutoSettings();   // 面板一改就同步「自动更新」里的参数副本（只改参数、不重排计划）
+}
+
+/* 把设置面板的最新一套同步到「自动更新」的参数副本。
+   后台以账号快照为准、副本只在快照缺项时兜底；但副本长期不同步会让人
+   在 /api/auto 与诊断接口里看到两套不一致的值，所以面板保存时顺手对齐。 */
+let autoSyncTimer = null;
+function syncAutoSettings(){
+  if (!state.user || isGuest() || !state.auto?.enabled) return;
+  const pid = state.selectedProgram?.id;
+  if (!pid) return;
+  clearTimeout(autoSyncTimer);
+  autoSyncTimer = setTimeout(() => {
+    const cats = [...state.selectedCats];
+    if (!cats.length) return;
+    const feeds = cats.flatMap(feedsOf).filter(u => state.selectedFeeds.has(u));
+    api('/api/auto', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({
+        enabled: true,
+        interval_hours: state.auto.interval_hours,
+        start_hhmm: state.auto.start_hhmm,
+        program_id: pid,
+        categories: cats,
+        feeds,
+        shares: collectShares(feeds),
+        rate: state.rate,
+        target_minutes: effectiveTargetMin(),
+        sort: state.sort,
+        voice: state.voice,
+        reschedule: false,
+      })
+    }).then(a => { state.auto = a; updateClock(); }).catch(()=>{});
+  }, 800);
 }
 function loadPrefs(pid){
   try {
