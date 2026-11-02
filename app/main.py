@@ -436,27 +436,182 @@ def _user_gen_shares(
     return None
 
 
-def _admin_gen_shares(program_id: str) -> dict[str, int] | None:
-    """定点定时用：管理员优先，没有就退到任意账号存的占比（见 _user_gen_shares ③）。"""
-    admins = [
-        u for u in store.list_users()
-        if u.get("role") == "admin" and not u.get("disabled")
+def _service_account() -> dict | None:
+    """后台任务（定点定时）跑在哪个账号上：第一个未禁用的管理员。"""
+    return next(
+        (u for u in store.list_users()
+         if u.get("role") == "admin" and not u.get("disabled")),
+        None,
+    )
+
+
+def _prefs_snapshot(uid: int, program_id: str) -> dict:
+    """账号存档里的生成设置快照：u<uid>:prefs 的 nr_gen_<节目>。
+
+    前端「保存并生成 / 仅保存」都会把整份设置（分类、源、音色、时长、排序、占比…）
+    同步到这里。后台任务只读这份，所以必须整套取出来用，不能只捡占比。
+    """
+    prefs = store.get_setting(f"u{int(uid)}:prefs") or {}
+    prefs = prefs.get("prefs") if isinstance(prefs, dict) and "prefs" in prefs else prefs
+    if not isinstance(prefs, dict):
+        return {}
+    raw = prefs.get(f"nr_gen_{program_id}")
+    if raw is None:
+        raw = prefs.get(f"nr_gen_{program_id}@u{int(uid)}")
+    try:
+        snap = json.loads(raw) if isinstance(raw, str) else raw
+    except (ValueError, TypeError):
+        snap = None
+    return snap if isinstance(snap, dict) else {}
+
+
+def _snapshot_fields(src: dict) -> dict:
+    """把前端快照（camelCase）或自动更新设置（snake_case）统一成 GenOptions 字段。"""
+    if not isinstance(src, dict):
+        return {}
+    out: dict = {}
+
+    # categories（自动更新面板/接口用 snake_case）优先于建档快照的 cats
+    cats = src.get("categories") if src.get("categories") is not None else src.get("cats")
+    if isinstance(cats, list):
+        cats = [str(c).strip() for c in cats if str(c).strip()]
+        if cats:
+            out["categories"] = cats
+
+    feeds = src.get("feeds")
+    if isinstance(feeds, list):
+        feeds = [str(u).strip() for u in feeds if str(u).strip()]
+        if feeds:
+            out["feeds"] = feeds
+
+    for key in ("rate", "sort", "voice"):
+        v = src.get(key)
+        if isinstance(v, str) and v.strip():
+            out[key] = v.strip()
+
+    tm = src.get("target_minutes")
+    if tm in (None, "", 0):
+        tm = src.get("targetMin")           # 快照里是 targetMin（可能是 'custom'）
+        if tm == "custom":
+            tm = src.get("targetCustom")
+    try:
+        tm = float(tm)
+        if 2 <= tm <= 240:
+            out["target_minutes"] = tm
+    except (TypeError, ValueError):
+        pass
+
+    try:
+        mi = int(src.get("max_items") or 0)
+        if 0 < mi <= 100:
+            out["max_items"] = mi
+    except (TypeError, ValueError):
+        pass
+
+    return out
+
+
+def _gen_gap_hours(program_id: str, uid: int) -> float | None:
+    """距上一期过去多久（小时）：后台生成按这段空档取新闻，既不漏也不重叠。"""
+    try:
+        last = store.latest(program_id, user_id=uid)
+        if not last or not last.get("created_at"):
+            return None
+        age = (now_local() - datetime.fromisoformat(last["created_at"])).total_seconds() / 3600
+    except (ValueError, TypeError):
+        return None
+    return round(min(72.0, max(1.0, age + 0.5)), 2)
+
+
+def _user_gen_options(
+    uid: int,
+    program_id: str,
+    *,
+    base: dict | None = None,
+    others: bool = True,
+    hours: float | None = None,
+    owner: int | None = None,
+) -> GenOptions:
+    """按账号存档组装完整生成参数（后台任务统一入口）。
+
+    base 优先于账号存档：自动更新面板里显式存过的项会盖掉账号存档，
+    没存过的项（值为空）自动回退到账号存档，避免「只设了占比，其它全默认」。
+    """
+    snap = _prefs_snapshot(uid, program_id)
+    src = dict(snap)
+    for k, v in (base or {}).items():
+        # 空值视为「面板没设」，继续沿用账号存档里的；否则会把手动调好的设置盖成默认
+        if v is None or v == "" or v == [] or v == {}:
+            continue
+        src[k] = v
+    fields = _snapshot_fields(src)
+
+    # 安全网：分类与源对不上时（改了分类但存档里还是旧源、自定义源被删等），
+    # 只保留两者都还存在的源；一个都不剩就放开源限制，免得生成出空节目。
+    if fields.get("categories") and fields.get("feeds"):
+        known = {
+            f.url
+            for c in fields["categories"] if c in cfg.categories
+            for f in cfg.categories[c].feeds
+        }
+        try:
+            known |= {str(f.get("url") or "") for f in store.custom_feeds(uid)}
+        except Exception:
+            pass
+        kept = [u for u in fields["feeds"] if u in known]
+        if kept:
+            fields["feeds"] = kept
+        else:
+            log.warning(
+                "账号 u%s 的 %s 设置里，源与所选分类对不上（%d 个源全不匹配），本次不限源",
+                uid, program_id, len(fields["feeds"]),
+            )
+            fields.pop("feeds", None)
+
+    shares = _norm_shares((base or {}).get("shares"))
+    if not shares:
+        shares = _user_gen_shares(uid, program_id, others=others)
+
+    opts = GenOptions(
+        **fields,
+        shares=shares,
+        user_id=int(owner if owner is not None else uid) or None,
+        lookback_hours=hours,
+    )
+    return opts
+
+
+def _describe_opts(opts: GenOptions) -> str:
+    """日志用：一眼看出这期到底按什么参数生成。"""
+    bits = [
+        "分类 " + (",".join(opts.categories) if opts.categories else "全部"),
+        "源 %s" % (len(opts.feeds) if opts.feeds else "不限"),
+        "音色 %s" % (opts.voice or "默认"),
+        "语速 %s" % (opts.rate or "默认"),
+        "时长 %s" % (("%.0f 分钟" % opts.target_minutes) if opts.target_minutes else "默认"),
+        "排序 %s" % (opts.sort or "默认"),
+        "占比 %s" % (opts.shares or "未设置"),
     ]
-    if not admins:
-        return _user_gen_shares(0, program_id, others=True)
-    return _user_gen_shares(int(admins[0]["id"]), program_id, others=True)
+    if opts.lookback_hours:
+        bits.append("回溯 %.1f 小时" % opts.lookback_hours)
+    return " · ".join(bits)
 
 
 def _scheduled_job(program_id: str):
     async def job():
-        # 定点定时也遵循「源占比」：否则定时出来的期永远不按占比，
-        # 用户在界面上设了占比会觉得「没生效」
-        shares = _admin_gen_shares(program_id)
-        if shares:
-            log.info("[%s] 定点定时带源占比：%s", program_id, shares)
-        else:
-            log.info("[%s] 定点定时：没有找到源占比设置，按默认分配", program_id)
-        await _run_generation(program_id, GenOptions(shares=shares))
+        # 定点定时以前只传占比，分类/源/音色/时长全按 config 默认，而且没带 user_id
+        # （导致不算这个账号的节目、自定义源与天气也不生效）——现在整套参数都从账号存档取。
+        admin = _service_account()
+        uid = int(admin["id"]) if admin else 0
+        opts = _user_gen_options(
+            uid, program_id,
+            hours=_gen_gap_hours(program_id, uid),
+        )
+        log.info(
+            "[%s] 定点定时生成（账号 %s）：%s",
+            program_id, (admin or {}).get("email", "无"), _describe_opts(opts),
+        )
+        await _run_generation(program_id, opts)
 
     return job
 
@@ -541,21 +696,12 @@ async def _run_auto(uid: int) -> None:
         return
 
     hours = float(data["interval_hours"])
-    opts = GenOptions(
-        categories=data.get("categories") or None,
-        feeds=data.get("feeds") or None,
-        # 自动更新设置里没存占比时，按 ①账号存档 → ②服务端记忆 → ③其他账号 依次回退
-        shares=data.get("shares") or _user_gen_shares(uid, program.id, others=True),
-        rate=data.get("rate") or None,
-        target_minutes=data.get("target_minutes") or None,
-        sort=data.get("sort") or None,
-        voice=data.get("voice") or None,
-        user_id=uid,  # 各用户的自动更新生成的节目归各自账号（管理员的那份访客可见）
-        lookback_hours=hours,  # 按间隔回溯，既覆盖刚过去的这段时间，又不会和上一期大量重叠
-    )
+    # 面板里存过的项优先；没存过的（分类/源/音色/时长…）自动回落到账号存档，
+    # 不再出现「只在设置面板调过，自动更新却全按默认跑」
+    opts = _user_gen_options(uid, program.id, base=data, hours=hours, owner=uid)
     log.info(
-        "自动更新触发（%s）：每 %.1f 小时一期，抓取最近 %.1f 小时，源占比 %s",
-        u["email"], hours, hours, opts.shares or "未设置",
+        "自动更新触发（%s）：每 %.1f 小时一期 · %s",
+        u["email"], hours, _describe_opts(opts),
     )
     await _run_generation(program.id, opts)
 
@@ -1003,12 +1149,15 @@ async def ensure(background: BackgroundTasks, request: Request, program_id: str 
         except ValueError:
             pass
 
-    # 补录也遵循该账号保存的「源占比」：否则打开首页补出来的那期永远不按占比，
-    # 用户点闪电一听「占比没生效」，其实占比根本没传进来
-    background.add_task(
-        _run_generation, program.id,
-        GenOptions(user_id=uid, shares=_user_gen_shares(uid, program.id)),
+    # 补录同样按该账号保存的整套设置来（分类/源/音色/时长/占比），
+    # 并按「距上一期多久」回溯，避免补出来的那期跟手动生成的口味不一致
+    opts = _user_gen_options(
+        uid, program.id,
+        hours=_gen_gap_hours(program.id, uid),
+        owner=uid,
     )
+    log.info("[%s] 首页自动补录（账号 %s）：%s", program.id, user.get("email"), _describe_opts(opts))
+    background.add_task(_run_generation, program.id, opts)
     return {"generating": True, "program_id": program.id}
 
 
@@ -1911,6 +2060,42 @@ async def reset_my_token(request: Request, req: dict, user: dict = Depends(requi
             "mp3": f"{base}/latest.mp3?{q}",
         }
     return out
+
+
+@app.get("/api/admin/gen-options")
+async def admin_gen_options(program_id: str = "", user: dict = Depends(require_admin)):
+    """后台任务（定点定时 / 自动更新 / 首页补录）实际会用的生成参数，排障用。
+
+    以前这些任务只拿「源占比」，分类/音色/时长全按 config 默认，
+    在界面上怎么调都不生效；这里把解析结果摊开，一眼看出是否读到了账号存档。
+    """
+    pid = program_id or (cfg.programs[0].id if cfg.programs else "")
+    if not pid or not cfg.get_program(pid):
+        raise HTTPException(404, "节目配置不存在")
+    admin = _service_account()
+    uid = int(admin["id"]) if admin else int(user["id"])
+    snap = _prefs_snapshot(uid, pid)
+    opts = _user_gen_options(uid, pid, hours=_gen_gap_hours(pid, uid))
+    return {
+        "program_id": pid,
+        "account": (admin or user).get("email"),
+        "uid": uid,
+        "snapshot_found": bool(snap),
+        "snapshot_keys": sorted(snap.keys()),
+        "options": {
+            "categories": opts.categories,
+            "feeds": len(opts.feeds) if opts.feeds else None,
+            "rate": opts.rate,
+            "sort": opts.sort,
+            "voice": opts.voice,
+            "target_minutes": opts.target_minutes,
+            "max_items": opts.max_items,
+            "shares": opts.shares,
+            "lookback_hours": opts.lookback_hours,
+            "user_id": opts.user_id,
+        },
+        "auto": _get_auto(uid),
+    }
 
 
 @app.get("/api/podcast")
