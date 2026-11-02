@@ -2346,9 +2346,9 @@ async def latest_content(request: Request, program_id: str | None = None,
         "returned": min(top, total),  # 这次实际返回的条数
         "weather": weather,
         "items": items[:top],
-        # 简洁清单（每条一行「- 标题」，类似热榜卡片样式，给 HA 通知/卡片直接用；
-        # 条与条之间空一行——Markdown 里单换行不换行，会挤成一坨）
-        "list_md": "\n\n".join(f"- {it['title']}" for it in items[:top] if it["title"]),
+        # 简洁清单（每条一行「- 标题」，类似热榜卡片样式，给 HA 通知/卡片直接用）。
+        # 每条之间只用单换行：条与条之间塞空行会让卡片里出现一片空白。
+        "list_md": "\n".join(f"- {it['title']}" for it in items[:top] if it["title"]),
         "url": f"{base}/audio/{ep['audio_file']}" if ep.get("audio_file") else "",
         "latest_mp3": f"{base}/latest.mp3",
     }

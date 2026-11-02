@@ -2,6 +2,16 @@
 
 本项目版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，更新记录按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式维护。
 
+## [1.0.9] - 2026-11-02
+
+### 修复
+
+- **`/api/latest/content` 的 `list_md` 每条前面多一个空行**：1.0.8 之前用 `"\n\n"` 拼接（怕 Markdown 单换行被吞），卡片/通知里每条之间都空一行，看着像一堆空行。改成单 `\n`，一条一行
+
+### 说明
+
+- HA 的 markdown 卡片本身开了 GFM 换行，单换行就够；`content: >` 是 YAML 折叠块，只影响模板源码、不影响模板输出的换行，所以不用为它特意加空行。想恢复空行在模板里 `| replace('\n', '\n\n')` 即可
+
 ## [1.0.8] - 2026-11-02
 
 ### 修复
