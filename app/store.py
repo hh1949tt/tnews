@@ -579,6 +579,16 @@ class Store:
         """
         return self.ensure_token(user_id, "ext_token")
 
+    def rotate_token(self, user_id: int, key: str, length: int = 24) -> str:
+        """换一把全新的纯字母数字令牌（旧地址立即失效）。
+
+        不做启动时自动迁移：ext 令牌常被 Home Assistant / Node-RED 引用，
+        静默换掉会让正在跑的自动化突然 403，所以只由用户在界面上显式触发。
+        """
+        tok = random_token(length)
+        self.set_user_setting(user_id, key, tok)
+        return tok
+
     def _user_by_setting_token(self, key: str, token: str) -> dict | None:
         t = str(token or "").strip()
         if not t or len(t) > 80:

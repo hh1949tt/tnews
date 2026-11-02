@@ -318,6 +318,8 @@ main{padding:16px 16px 8px;max-width:720px;margin:0 auto}
 /* 我的账号：播客订阅 / 外部订阅 / 外部调用，地址不直接摊开，只给「复制地址」 */
 .asec{margin-top:11px;padding-top:10px;border-top:1px dashed var(--line)}
 .asec-head{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.asec-btns{display:flex;align-items:center;gap:6px}
+.acopy.armed{color:var(--accent);border-color:var(--accent)}
 .asec-head .alb{font-size:12.5px;font-weight:650;color:var(--txt)}
 .acopy{padding:5px 11px;border-radius:8px;background:var(--card);border:1px solid var(--line);
   font-size:11.5px;font-weight:600;color:var(--accent);transition:.15s}
@@ -3668,15 +3670,17 @@ function renderAccount(){
     `<div>用户ID：<b id="acctUid" style="cursor:pointer;letter-spacing:0.5px" title="外部按账号调用时需要带上这个 ID（点击复制）">${state.user.uid || '—'}</b></div>` +
     `<div class="asec">
 
-       <div class="asec-head"><span class="alb">速听分享</span><button class="acopy" id="acctSubCopy" disabled>复制地址</button></div>
+       <div class="asec-head"><span class="alb">速听分享</span><span class="asec-btns"><button class="acopy" id="acctSubNew" disabled>换新令牌</button><button class="acopy" id="acctSubCopy" disabled>复制地址</button></span></div>
        <div class="seg" id="acctSubSeg" style="margin-top:7px"></div>
+       <div class="asec-note" id="acctSubHint"></div>
      </div>` +
     `<div class="asec">
-       <div class="asec-head"><span class="alb">播客订阅</span><button class="acopy" id="acctFeedCopy" disabled>复制地址</button></div>
+       <div class="asec-head"><span class="alb">播客订阅</span><span class="asec-btns"><button class="acopy" id="acctFeedNew" disabled>换新令牌</button><button class="acopy" id="acctFeedCopy" disabled>复制地址</button></span></div>
        <div class="seg" id="acctPodSeg" style="margin-top:7px"></div>
+       <div class="asec-note" id="acctFeedNote"></div>
      </div>` +
     `<div class="asec">
-       <div class="asec-head"><span class="alb">接口调用</span><button class="acopy" id="acctExtCopy" disabled>复制地址</button></div>
+       <div class="asec-head"><span class="alb">接口调用</span><span class="asec-btns"><button class="acopy" id="acctExtNew" disabled>换新令牌</button><button class="acopy" id="acctExtCopy" disabled>复制地址</button></span></div>
        <div class="seg" id="acctExtSeg" style="margin-top:7px"></div>
 	   <div class="asec-note" id="acctExtHint"></div>
      </div>`;
@@ -3687,6 +3691,40 @@ function renderAccount(){
   renderMyPodcast();
   renderMySub();
   renderMyExt();
+}
+
+/* 「换新令牌」：两次点击确认（第一次变成「再点一次确认」，5 秒内不点自动还原）。
+   不做静默迁移——接口调用的令牌常被 HA / Node-RED 引用，突然换掉会让对方 401/403。 */
+const TOKEN_RESET_TIPS = {
+  sub:  '已换新令牌，旧速听分享地址已失效，需要把新地址重新发给对方',
+  feed: '已换新令牌，播客 App 里的旧订阅需删掉重新添加新地址',
+  ext:  '已换新令牌，Home Assistant / Node-RED 里的 ext= 要同步改成新值',
+};
+
+function makeTokenRotator(btn, kind, after){
+  const LABEL = '换新令牌';
+  let timer = 0;
+  const reset = () => { btn.textContent = LABEL; btn.classList.remove('armed'); timer = 0; };
+  btn.onclick = async () => {
+    if (!timer){
+      btn.textContent = '再点一次确认';
+      btn.classList.add('armed');
+      timer = setTimeout(reset, 5000);
+      return;
+    }
+    clearTimeout(timer); reset();
+    btn.disabled = true;
+    try {
+      await api('/api/me/token/reset', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind }),
+      });
+      toast(TOKEN_RESET_TIPS[kind] || '已换新令牌', 4600);
+    } catch(e){
+      toast('更换失败：' + (e.detail || e.message || ''), 3600);
+    }
+    if (after) after();
+  };
 }
 
 /* 自己的「播客订阅」开关：独立开关 + 独立令牌，生成 /feed/<令牌>.xml 只装本账号节目。
@@ -3723,12 +3761,19 @@ async function renderMyPodcast(){
     feedBtn.disabled = !ready;
     feedBtn.onclick = ready ? () => copyText(st.feed_url, '已复制播客订阅地址', '播客订阅地址：') : null;
   }
+  const feedNew = $('#acctFeedNew');
+  if (feedNew){
+    feedNew.disabled = !st.token;
+    if (st.token) makeTokenRotator(feedNew, 'feed', renderMyPodcast);
+  }
   if (feedNote){
-    feedNote.innerHTML = !st.enabled
+    let t = !st.enabled
       ? '开启后生成专属 RSS 地址，加进小宇宙 / Apple Podcasts'
       : (st.global_enabled
           ? '在播客 App 里添加这个地址，只包含本账号的节目'
           : '管理员总开关未打开，地址暂时无法访问');
+    if (st.legacy) t += '；当前令牌含 - _ 等符号，点「换新令牌」可换成纯字母数字（旧地址随即失效）';
+    feedNote.innerHTML = t;
   }
 }
 
@@ -3768,14 +3813,19 @@ async function renderMySub(){
     subBtn.onclick = ready ? () => copyText(st.url, '已复制速听分享地址', '速听分享地址：') : null;
   }
 
-  if (!hint) return;
-  if (!st.enabled){
-    hint.innerHTML = '速听分享：已关闭';
-  } else {
-    hint.innerHTML = (st.global_enabled
-      ? '速听分享：已开启'
-      : '速听分享：已开启，但管理员全局未开，地址暂时无法访问');
+  const subNew = $('#acctSubNew');
+  if (subNew){
+    subNew.disabled = !st.token;
+    if (st.token) makeTokenRotator(subNew, 'sub', renderMySub);
   }
+  if (!hint) return;
+  const subBase = !st.enabled
+    ? '速听分享：已关闭'
+    : (st.global_enabled
+        ? '速听分享：已开启'
+        : '速听分享：已开启，但管理员全局未开，地址暂时无法访问');
+  hint.innerHTML = subBase
+    + (st.legacy ? '；当前令牌含 - _ 等符号，点「换新令牌」可换成纯字母数字（旧地址随即失效）' : '');
 }
 
 /* 自己的「外部」分开关：用户可以在我的账号里自助开关（管理员控制总开关） */
@@ -3814,11 +3864,14 @@ async function renderMyExt(){
     extBtn.disabled = !ready;
     extBtn.onclick = ready ? () => copyText(extUrl, '已复制接口调用地址', '接口调用地址：') : null;
   }
-  hint.innerHTML = !st.enabled
-    ? ''
-    : (st.global_enabled
-        ? ''
-        : '');
+  const extNew = $('#acctExtNew');
+  if (extNew){
+    extNew.disabled = !st.ext_token;
+    if (st.ext_token) makeTokenRotator(extNew, 'ext', renderMyExt);
+  }
+  hint.innerHTML = ''
+    + (!st.enabled ? '' : (st.global_enabled ? '' : '管理员总开关未打开，地址暂时无法访问'))
+    + (st.legacy ? '<br>当前令牌含 - _ 等符号，点「换新令牌」可换成纯字母数字（换完要同步改 Home Assistant / Node-RED 里的 ext=）' : '');
 }
 
 $('#btnLogout').onclick = async () => {

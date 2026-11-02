@@ -2,6 +2,18 @@
 
 本项目版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，更新记录按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式维护。
 
+## [1.0.3] - 2026-11-02
+
+### 新增
+
+- 「我的账号」里速听分享、播客订阅、接口调用各加一个**换新令牌**按钮（两次点击确认）：生成一把全新的纯字母数字令牌，旧地址立即失效。换接口调用令牌后需同步改 Home Assistant / Node-RED 里的 `ext=`，所以不做静默自动迁移
+- 三类令牌的读取接口（`/api/me/subscribe`、`/api/me/podcast`、`/api/me/external`）新增 `legacy` 字段，标记当前令牌是否为旧版带符号格式；旧令牌在界面上会提示可换新
+- 新增 `POST /api/me/token/reset`（`kind: sub / feed / ext`）
+
+### 修复
+
+- 「我的账号」面板里速听分享与播客订阅的提示文字此前不显示（提示元素 id 在 HTML 里缺失）
+
 ## [1.0.2] - 2026-11-02
 
 ### 修复

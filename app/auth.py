@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import re
 import secrets
 
 PBKDF2_ITERATIONS = 120_000
@@ -49,6 +50,16 @@ def random_token(length: int = 32, *, mixed_case: bool = False) -> str:
 def new_token() -> str:
     """登录口令（请求头里的那种）。"""
     return random_token(40, mixed_case=True)
+
+
+def is_clean_token(tok: str) -> bool:
+    """令牌是否只由字母数字组成。
+
+    早期版本用 secrets.token_urlsafe() 生成，会带 `-` 和 `_`；
+    现在统一改成纯字母数字，这类旧令牌在界面上会提示「可换新」。
+    """
+    t = str(tok or "").strip()
+    return bool(t) and re.fullmatch(r"[0-9A-Za-z]+", t) is not None
 
 
 def random_password(length: int = 12) -> str:

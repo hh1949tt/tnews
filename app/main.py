@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from . import __version__, pipeline, summarizer, weather
-from .auth import hash_password, new_token, random_password, verify_password
+from .auth import hash_password, is_clean_token, new_token, random_password, verify_password
 from .config import (AUDIO_DIR, BASE_DIR, CST, DATA_DIR, WEB_DIR, load_config, now_local,
                      resolve_hhmm_window)
 from .pipeline import GenOptions
@@ -1775,6 +1775,7 @@ async def get_my_external(request: Request, user: dict = Depends(require_user)):
         "uid": user.get("uid"),
         "account": user.get("email"),
         "ext_token": tok,
+        "legacy": not is_clean_token(tok),      # 旧版令牌带 - _，界面提示可换新
         "urls": {
             "latest": f"{base}/api/latest?{q}",
             "content": f"{base}/api/latest/content?{q}",
@@ -1809,6 +1810,7 @@ async def get_my_subscribe(request: Request, user: dict = Depends(require_user))
         "enabled": bool(store.get_user_setting(uid, "sub_enabled", False)),
         "global_enabled": _allow_subscribe(),
         "token": tok,
+        "legacy": not is_clean_token(tok),
         "url": _sub_url(request, tok) if tok else "",
         "account": user.get("email"),
     }
@@ -1840,6 +1842,7 @@ async def get_my_podcast(request: Request, user: dict = Depends(require_user)):
         "enabled": bool(store.get_user_setting(uid, "feed_enabled", False)),
         "global_enabled": _allow_podcast(),
         "token": tok,
+        "legacy": not is_clean_token(tok),
         "feed_url": _sub_feed_url(request, tok) if tok else "",
         "account": user.get("email"),
     }
@@ -1860,6 +1863,54 @@ async def set_my_podcast(request: Request, req: dict, user: dict = Depends(requi
         "feed_url": _sub_feed_url(request, tok) if tok else "",
         "account": user.get("email"),
     }
+
+
+@app.post("/api/me/token/reset")
+async def reset_my_token(request: Request, req: dict, user: dict = Depends(require_user)):
+    """把某一类令牌换成一串全新的纯字母数字令牌（旧地址立即失效）。
+
+    kind：
+      sub  → 速听分享 /s/<令牌>
+      feed → 播客订阅 /feed/<令牌>.xml
+      ext  → 接口调用 ?ext=<令牌>（换了要同步改 Home Assistant / Node-RED 里的配置）
+
+    只在用户点了「换新令牌」时执行：自动迁移会把正在被外部系统引用的 ext 令牌换掉，
+    导致对方突然 401/403，所以这里坚持显式触发。
+    """
+    kind = str((req or {}).get("kind") or "").strip().lower()
+    uid = int(user["id"])
+    kinds = {
+        "sub": ("sub_token", "速听分享"),
+        "feed": ("feed_token", "播客订阅"),
+        "ext": ("ext_token", "接口调用"),
+    }
+    if kind not in kinds:
+        raise HTTPException(status_code=400, detail="kind 只能是 sub / feed / ext")
+    key, label = kinds[kind]
+    tok = store.rotate_token(uid, key)
+    log.info("用户 %s 更换了%s令牌", user.get("email"), label)
+
+    out = {"kind": kind, "token": tok, "legacy": False}
+    if kind == "sub":
+        out["url"] = _sub_url(request, tok)
+        out["enabled"] = bool(store.get_user_setting(uid, "sub_enabled", False))
+        out["global_enabled"] = _allow_subscribe()
+    elif kind == "feed":
+        out["feed_url"] = _sub_feed_url(request, tok)
+        out["enabled"] = bool(store.get_user_setting(uid, "feed_enabled", False))
+        out["global_enabled"] = _allow_podcast()
+    else:
+        base = _base_url(request).rstrip("/")
+        q = f"ext={tok}"
+        out["ext_token"] = tok
+        out["enabled"] = bool(store.get_user_setting(uid, "allow_external", False))
+        out["global_enabled"] = _allow_external_latest()
+        out["urls"] = {
+            "latest": f"{base}/api/latest?{q}",
+            "content": f"{base}/api/latest/content?{q}",
+            "mp3": f"{base}/latest.mp3?{q}",
+        }
+    return out
 
 
 @app.get("/api/podcast")

@@ -25,7 +25,7 @@
 
 | 接口 | 返回 | 用途 |
 |---|---|---|
-| `GET /health` | `{"ok":true,"version":"1.0.2","time":"..."}` | 探活、确认版本 |
+| `GET /health` | `{"ok":true,"version":"1.0.3","time":"..."}` | 探活、确认版本 |
 | `GET /api/latest` | 最新一期的最小信息 | HA REST sensor、脚本判断有没有新一期 |
 | `GET /api/latest/content` | 最新一期的完整内容 | 仪表盘显示全文 / 标题清单 |
 | `GET /api/programs` | 节目清单 + 各自最新一期 | 确认 `program_id` 该写什么 |
