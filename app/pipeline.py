@@ -135,6 +135,31 @@ def _norm_feed(url: str) -> str:
     return s
 
 
+def _dedup_buckets(buckets: dict[str, list]) -> tuple[dict[str, list], int]:
+    """跨分类按标题判重，返回 (去重后的 buckets, 去掉的条数)。
+
+    中国新闻网这类站点会把同一篇稿子同时挂到「时政」「滚动」等多个源里，
+    分类不同但其实是同一条新闻。必须在**按占比裁剪之前**剔掉：占比名额是按条数
+    分的，重复稿先占掉名额、后面再被去重，一期就会少几条。
+    """
+    seen: list[str] = []
+    out: dict[str, list] = {}
+    dropped = 0
+    for cat, items in buckets.items():
+        keep = []
+        for it in items:
+            key = fetcher._norm_key(it.title)
+            if key and any(fetcher._similar(key, s) for s in seen):
+                dropped += 1
+                continue
+            if key:
+                seen.append(key)
+            keep.append(it)
+        if keep:
+            out[cat] = keep
+    return out, dropped
+
+
 def _apply_shares(
     buckets: dict[str, list], shares: dict[str, int], max_items: int
 ) -> tuple[dict[str, list], set[str]]:
@@ -253,8 +278,16 @@ async def generate_episode(
         if not plan:
             raise RuntimeError("没有选中任何可用的抓取源，请至少勾选一个")
 
+        async def _collect(w_start, w_end, per_cat: int = 40) -> dict[str, list]:
+            """抓取 + 跨分类判重（同一篇稿子常被时政/滚动/国际多个源同时收录）。"""
+            b = await fetcher.collect(plan, w_start, w_end, per_category_limit=per_cat)
+            b, dup = _dedup_buckets(b)
+            if dup:
+                log.info("[%s] 跨分类判重：去掉 %d 条转载稿", program.id, dup)
+            return b
+
         log.info("[%s] 抓取 %d 个源，窗口 %s ~ %s", program.id, len(plan), start, end)
-        buckets = await fetcher.collect(plan, start, end, per_category_limit=40)
+        buckets = await _collect(start, end)
         total = sum(len(v) for v in buckets.values())
         log.info("[%s] 窗口内去重后 %d 条", program.id, total)
 
@@ -263,7 +296,7 @@ async def generate_episode(
         if total < 3 and not custom_window:
             fb_start, fb_end = now - timedelta(hours=12), now
             log.info("[%s] 原窗口内容不足，放宽到最近 12 小时", program.id)
-            buckets = await fetcher.collect(plan, fb_start, fb_end, per_category_limit=40)
+            buckets = await _collect(fb_start, fb_end)
             if sum(len(v) for v in buckets.values()) > total:
                 start, end = fb_start, fb_end
 
@@ -299,8 +332,7 @@ async def generate_episode(
                 w_start, w_end = now - timedelta(hours=hours), now
                 log.info("[%s] 跑步模式条数不足（%d/%d），扩大窗口到最近 %d 小时",
                          program.id, got, need, hours)
-                b2 = await fetcher.collect(plan, w_start, w_end,
-                                           per_category_limit=60)
+                b2 = await _collect(w_start, w_end, 60)
                 n2 = sum(len(v) for v in b2.values())
                 if n2 > got:
                     buckets, got = b2, n2
@@ -402,8 +434,7 @@ async def generate_episode(
                 if got < new_cap:
                     for hours in (24, 48, 96, 168):
                         w_start, w_end = now - timedelta(hours=hours), now
-                        b2 = await fetcher.collect(plan, w_start, w_end,
-                                                   per_category_limit=60)
+                        b2 = await _collect(w_start, w_end, 60)
                         n2 = sum(len(v) for v in b2.values())
                         if n2 > got:
                             buckets, got = b2, n2

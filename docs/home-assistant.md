@@ -179,6 +179,8 @@ content: >
   {{ state_attr('sensor.tnews_content', 'list') }}
 ```
 
+`list` 只输出前 **10** 条（一期几十条时卡片会很长）。要改数量就动「⚙️ 统一配置」里的 `list_limit`：填 `20` 就前 20 条，填 `0` 就是全部。它只影响清单展示，正片音频和 `content` 全文都不受影响；如果不用 Node-RED 而是直接调接口，用 `?limit=N` 参数。
+
 > 改文案格式就动「拼 Markdown」函数，`md.push(...)` 每行一目了然。HA 重启后 sensor 会消失一次，最多 5 分钟自动写回。
 
 ### 踩过的坑

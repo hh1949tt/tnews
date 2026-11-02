@@ -95,6 +95,12 @@ curl "http://NAS:18282/api/latest/content?program_id=morning"
 
 `text` 是口播稿（用来显示或 TTS 复用），`start` 是在整期音频里的秒数。天气没开时 `weather` 为 `null`。
 
+**只要前 N 条**：加 `limit=N`（1~200），`items` 与 `list_md` 都只返回前 N 条，`item_count` 仍是本期总数，`returned` 是这次实际返回的条数。
+
+```bash
+curl "http://NAS:18282/api/latest/content?limit=10"
+```
+
 ## GET /latest.mp3
 
 302 跳到最新一期音频，播放器可以直接用。适合「不关心是哪一期、有就播」的场景。

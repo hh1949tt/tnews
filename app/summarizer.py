@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 from datetime import datetime
@@ -10,6 +11,8 @@ import httpx
 
 from .config import Config, Program, now_local
 from .fetcher import Item, _norm_key, _similar
+
+log = logging.getLogger("tnews.summarizer")
 
 SORTS = {"category": "按分类", "date": "按时间", "source": "按平台"}
 
@@ -229,35 +232,79 @@ def build_script(
         extra = max_items - base * len(active_cats)
         limits = {cat: base + (1 if i < extra else 0) for i, cat in enumerate(active_cats)}
 
-        grouped: list[tuple[str, list[Item]]] = []
-        shortfall = 0
-        for cat in active_cats:
+        # 分类内按热度顺序取，**跨分类按标题判重**：同一篇稿子常同时出现在
+        # 「中国新闻网·时政」（国内）和「中国新闻网·滚动」（社会）里，
+        # 以前只有 date / source 排序做了去重，按分类播报的口播稿会把同一条念两遍。
+        seen: list[str] = []
+        cursors = {cat: 0 for cat in active_cats}
+        taken: dict[str, list[Item]] = {cat: [] for cat in active_cats}
+        dup_dropped = 0
+
+        def _take(cat: str, quota: int) -> int:
+            """从 cat 的候选里按顺序取至多 quota 条，跳过与其他分类重复的标题。"""
+            nonlocal dup_dropped
             lst = per_cat[cat]
-            take = min(max(limits[cat], 1), len(lst))
-            shortfall += limits[cat] - take
-            grouped.append((cat, lst[:take]))
+            i, got = cursors[cat], 0
+            while i < len(lst) and got < quota:
+                it = lst[i]
+                i += 1
+                key = _norm_key(it.title)
+                if key and any(_similar(key, s) for s in seen):
+                    dup_dropped += 1
+                    continue
+                if key:
+                    seen.append(key)
+                taken[cat].append(it)
+                got += 1
+            cursors[cat] = i
+            return got
 
-        # 某些分类条目不足时，把空余名额补给其他分类
-        if shortfall > 0:
-            for i, (cat, sel) in enumerate(grouped):
-                if shortfall <= 0:
+        for cat in active_cats:
+            _take(cat, limits[cat])
+
+        # 某些分类条目不足（或全是重复稿）时空出的名额，轮流补给还有余量的分类
+        total_taken = sum(len(v) for v in taken.values())
+        while total_taken < max_items:
+            progressed = False
+            for cat in active_cats:
+                if total_taken >= max_items:
                     break
-                lst = per_cat[cat]
-                if len(lst) > len(sel):
-                    add = min(shortfall, len(lst) - len(sel))
-                    grouped[i] = (cat, lst[: len(sel) + add])
-                    shortfall -= add
+                if cursors[cat] >= len(per_cat[cat]):
+                    continue
+                if _take(cat, 1):
+                    total_taken += 1
+                    progressed = True
+            if not progressed:
+                break
 
-        picked = [(cat, it) for cat, sel in grouped for it in sel]
+        picked = [(cat, it) for cat in active_cats for it in taken[cat]]
 
         # 按分类同样防单一平台刷屏（如热榜全是微博）
         src_cap = max(2, max_items // 3)
         counts: dict[str, int] = {}
         capped, rest = _cap_sources(picked, src_cap, counts)
-        if len(capped) < 5 and rest:
-            more, rest = _cap_sources(rest, src_cap + 3, counts)
+        if len(capped) < max_items and rest:
+            # 被「同一平台上限」挤下来的条目按顺序补回来（同样跳过重复标题），
+            # 否则目标条数会因为防刷屏而缩水
+            kept = [_norm_key(it.title) for _c, it in capped]
+            more: list[tuple[str, Item]] = []
+            for i, (cat, it) in enumerate(rest):
+                if len(capped) + len(more) >= max_items:
+                    break
+                key = _norm_key(it.title)
+                if key and any(_similar(key, k) for k in kept if k):
+                    dup_dropped += 1
+                    continue
+                if key:
+                    kept.append(key)
+                more.append((cat, it))
             capped.extend(more)
         picked = capped
+        # 补位是从各分类交叉挑的，按分类顺序稳定排序，保证同一分类连续播报
+        order = {cat: i for i, cat in enumerate(active_cats)}
+        picked.sort(key=lambda kv: order.get(kv[0], len(order)))
+        if dup_dropped:
+            log.info("跨分类去重：跳过 %d 条标题重复的转载稿", dup_dropped)
 
     items = [it for _, it in picked]
     rewritten = _llm_rewrite(items, cfg)

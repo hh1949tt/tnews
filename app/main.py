@@ -2292,11 +2292,12 @@ async def latest_info(request: Request, program_id: str | None = None,
 async def latest_content(request: Request, program_id: str | None = None,
                          user: str | None = None, token: str | None = None,
                          id: str | None = None, uid: str | None = None,
-                         ext: str | None = None):
+                         ext: str | None = None, limit: int | None = None):
     """最新一期的**内容明细**：分类、标题、正文、来源、原文链接、播报时间点。
 
     鉴权/参数与 /api/latest 完全一致（ext= 外部调用令牌 / token 或 ?user=账号&id=6位ID 或访客）。
     给 Home Assistant、自动化脚本、第三方 App 取「这一期都有什么新闻」用。
+    `limit=N` 只取前 N 条（1~200），用于仪表盘只要前十这类场景。
     """
     ep = _latest_strict(request, program_id, user, token, id or uid, ext)
     program = cfg.get_program(ep.get("program_id") or "")
@@ -2329,6 +2330,10 @@ async def latest_content(request: Request, program_id: str | None = None,
                 "start": ch.get("start"),
             })
     base = _base_url(request)
+    total = len(items)
+    top = total
+    if limit is not None:
+        top = max(1, min(int(limit), 200))
     return {
         "id": ep.get("id"),
         "title": ep.get("title"),
@@ -2337,12 +2342,13 @@ async def latest_content(request: Request, program_id: str | None = None,
         "seq": ep.get("seq"),
         "created_at": ep.get("created_at"),
         "duration": ep.get("duration"),
-        "item_count": len(items),
+        "item_count": total,          # 本期总条数（不受 limit 影响）
+        "returned": min(top, total),  # 这次实际返回的条数
         "weather": weather,
-        "items": items,
+        "items": items[:top],
         # 简洁清单（每条一行「- 标题」，类似热榜卡片样式，给 HA 通知/卡片直接用；
         # 条与条之间空一行——Markdown 里单换行不换行，会挤成一坨）
-        "list_md": "\n\n".join(f"- {it['title']}" for it in items if it["title"]),
+        "list_md": "\n\n".join(f"- {it['title']}" for it in items[:top] if it["title"]),
         "url": f"{base}/audio/{ep['audio_file']}" if ep.get("audio_file") else "",
         "latest_mp3": f"{base}/latest.mp3",
     }
