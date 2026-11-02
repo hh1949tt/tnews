@@ -2288,16 +2288,23 @@ async def latest_info(request: Request, program_id: str | None = None,
     }
 
 
+def _want_blank(v) -> bool:
+    """?blank= 的取值：1/true/yes/on/gap/blank 都表示「条与条之间空一行」。"""
+    return str(v or "").strip().lower() in {"1", "true", "yes", "y", "on", "blank", "gap", "space", "空行"}
+
+
 @app.get("/api/latest/content")
 async def latest_content(request: Request, program_id: str | None = None,
                          user: str | None = None, token: str | None = None,
                          id: str | None = None, uid: str | None = None,
-                         ext: str | None = None, limit: int | None = None):
+                         ext: str | None = None, limit: int | None = None,
+                         blank: str | None = None):
     """最新一期的**内容明细**：分类、标题、正文、来源、原文链接、播报时间点。
 
     鉴权/参数与 /api/latest 完全一致（ext= 外部调用令牌 / token 或 ?user=账号&id=6位ID 或访客）。
     给 Home Assistant、自动化脚本、第三方 App 取「这一期都有什么新闻」用。
     `limit=N` 只取前 N 条（1~200），用于仪表盘只要前十这类场景。
+    `blank=1` 清单条目之间空一行；不加则一行一条（`list_md_blank` 恒为空行版，直接取字段也行）。
     """
     ep = _latest_strict(request, program_id, user, token, id or uid, ext)
     program = cfg.get_program(ep.get("program_id") or "")
@@ -2334,6 +2341,11 @@ async def latest_content(request: Request, program_id: str | None = None,
     top = total
     if limit is not None:
         top = max(1, min(int(limit), 200))
+    titles = [it["title"] for it in items[:top] if it["title"]]
+    # 清单分隔符由 blank 决定：默认单换行（一行一条），blank=1 时条与条之间空一行。
+    # 通知类渠道（企业微信、Bark、邮件正文）里空行才看得出「一条一条」；
+    # markdown 卡片里空行会显得松散，所以默认不空。
+    gap = "\n\n" if _want_blank(blank) else "\n"
     return {
         "id": ep.get("id"),
         "title": ep.get("title"),
@@ -2346,9 +2358,12 @@ async def latest_content(request: Request, program_id: str | None = None,
         "returned": min(top, total),  # 这次实际返回的条数
         "weather": weather,
         "items": items[:top],
-        # 简洁清单（每条一行「- 标题」，类似热榜卡片样式，给 HA 通知/卡片直接用）。
-        # 每条之间只用单换行：条与条之间塞空行会让卡片里出现一片空白。
-        "list_md": "\n".join(f"- {it['title']}" for it in items[:top] if it["title"]),
+        # 简洁清单（每条一行「- 标题」），分隔符见上面的 gap
+        "list_md": gap.join(f"- {t}" for t in titles),
+        # 空行版常驻字段：不想记参数就直接取它
+        "list_md_blank": "\n\n".join(f"- {t}" for t in titles),
+        # 不带「- 」前缀的纯标题，一行一条，方便自己拼模板
+        "list_text": gap.join(titles),
         "url": f"{base}/audio/{ep['audio_file']}" if ep.get("audio_file") else "",
         "latest_mp3": f"{base}/latest.mp3",
     }

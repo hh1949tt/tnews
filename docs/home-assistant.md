@@ -181,6 +181,21 @@ content: >
 
 `list` 只输出前 **10** 条（一期几十条时卡片会很长）。要改数量就动「⚙️ 统一配置」里的 `list_limit`：填 `20` 就前 20 条，填 `0` 就是全部。它只影响清单展示，正片音频和 `content` 全文都不受影响；如果不用 Node-RED 而是直接调接口，用 `?limit=N` 参数。
 
+**条目之间要不要空一行**，由同一个配置里的 `list_blank` 决定：`false`（默认）一行一条，`true` 则条与条之间空一行（发到企业微信、邮件、通知里更清楚）。不想改配置的话，sensor 还常驻这两个属性，直接在模板里换名字就行：
+
+| 属性 | 形态 |
+|---|---|
+| `list` | `- 标题`，分隔符按 `list_blank` |
+| `list_blank` | `- 标题`，**恒为空行分隔** |
+| `list_text` | 纯标题，不带 `- ` 前缀，分隔符按 `list_blank` |
+
+```yaml
+content: >
+  {{ state_attr('sensor.tnews_content', 'list_blank') }}
+```
+
+> 直接调接口时对应的是 `?blank=1`（`list_md_blank` 字段恒为空行版），见 [API 文档](api.md)。
+
 > 改文案格式就动「拼 Markdown」函数，`md.push(...)` 每行一目了然。HA 重启后 sensor 会消失一次，最多 5 分钟自动写回。
 
 ### 踩过的坑

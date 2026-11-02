@@ -2,6 +2,20 @@
 
 本项目版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，更新记录按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式维护。
 
+## [1.0.10] - 2026-11-02
+
+### 新增
+
+- **清单条目之间要不要空行，现在可以自己选**（不用再改代码/模板函数）：
+  - 接口 `/api/latest/content` 加 `blank=1`（`true`/`yes`/`blank` 也认），`list_md` 与 `list_text` 变成空行分隔；不带则一行一条
+  - 同时新增两个常驻字段：`list_md_blank`（恒为空行版 `- 标题`）、`list_text`（纯标题，不带 `- ` 前缀）
+  - Node-RED flow「⚙️ 统一配置」加 `list_blank`（默认 `false`）控制 `sensor.tnews_content` 的 `list` 属性；sensor 另外常驻 `list_blank`（恒空行版）和 `list_text` 两个属性，模板里换个名字就能切，不用重导入
+
+### 说明
+
+- 默认值仍是「一行一条」，与 1.0.9 行为一致，老模板不用改
+- `limit` 与新的分隔符互不影响：先按 `limit` 截条数，再拼分隔符
+
 ## [1.0.9] - 2026-11-02
 
 ### 修复
