@@ -31,7 +31,7 @@ mkdir -p /vol1/1000/docker/tnews
 1. 电脑上从 GitHub 下载 `Code → Download ZIP`（或 Release 里的 `tnews-<版本>.zip`）；
 2. 文件管理进入 `/vol1/1000/docker/tnews`，点「上传」选这个 zip；
 3. 上传完成后右键 zip →「解压」；
-4. 如果解压出的是 `tnews-1.0.1/` 这样的一层目录，把里面的文件**全部剪切**到 `tnews` 根目录（`Dockerfile` 必须直接位于 `tnews` 下）。
+4. 如果解压出的是 `tnews-1.0.2/` 这样的一层目录，把里面的文件**全部剪切**到 `tnews` 根目录（`Dockerfile` 必须直接位于 `tnews` 下）。
 
 ### 方式 B：SSH 直接下（NAS 能上外网时最省事）
 
@@ -39,7 +39,7 @@ mkdir -p /vol1/1000/docker/tnews
 
 ```bash
 cd /vol1/1000/docker/tnews
-wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.1.tar.gz
+wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.2.tar.gz
 tar -xzf tnews.tar.gz --strip-components=1
 rm tnews.tar.gz
 ```

@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import logging
 import math
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -51,7 +52,8 @@ async def synthesize_weather(
     uid = user_id or 0
     now = now_local()
     today = now.strftime("%Y-%m-%d")
-    name = f"weather-{uid}-{now.strftime('%Y%m%d')}.mp3"
+    # 文件名只用字母数字：不带 - _ 之类符号（部分播放器/自动化对特殊字符不友好）
+    name = f"weather{uid}{now.strftime('%Y%m%d')}.mp3"
     old = store.get_setting(f"u{uid}:weather_audio") or {}
     if old.get("date") == today and old.get("file") == name and (AUDIO_DIR / name).exists():
         return old
@@ -115,6 +117,17 @@ def _largest_remainder(total: int, weights: dict[str, int]) -> dict[str, int]:
     return {**{k: 0 for k in weights}, **alloc}
 
 
+def _norm_feed(url: str) -> str:
+    """源地址归一化：忽略 http/https、主机大小写、末尾斜杠和空白。
+
+    占比是按 url 存的，配置里写成 `http://…` 还是 `https://…`、末尾带不带 `/`，
+    都会让「同一个源」对不上号，表现为占比静默不生效。
+    """
+    s = str(url or "").strip()
+    s = re.sub(r"^https?://", "", s, flags=re.I)
+    return s.rstrip("/").lower()
+
+
 def _apply_shares(
     buckets: dict[str, list], shares: dict[str, int], max_items: int
 ) -> tuple[dict[str, list], set[str]]:
@@ -130,7 +143,20 @@ def _apply_shares(
         for it in items:
             avail[it.feed_url] = avail.get(it.feed_url, 0) + 1
 
-    shared = {u: int(p) for u, p in (shares or {}).items() if u in avail and 0 < int(p) <= 100}
+    # 按归一化地址匹配：配置里 http/https、末尾斜杠、主机大小写不同也能命中同一个源
+    norm2url = {}
+    for items in buckets.values():
+        for it in items:
+            norm2url.setdefault(_norm_feed(it.feed_url), it.feed_url)
+    shared: dict[str, int] = {}
+    for u, p in (shares or {}).items():
+        try:
+            p = int(p)
+        except (TypeError, ValueError):
+            continue
+        tgt = u if u in avail else norm2url.get(_norm_feed(u))
+        if tgt and 0 < p <= 100:
+            shared[tgt] = p
     if not shared:
         return buckets, set()
 
@@ -287,9 +313,10 @@ async def generate_episode(
             if uncapped:
                 log.info("[%s] 源占比生效：%s", program.id, hit)
             else:
+                got = sorted({it.feed_url for items in buckets.values() for it in items})
                 log.warning(
-                    "[%s] 源占比一个都没生效（请求带占比但 url 与实际抓到的源不匹配）：%s",
-                    program.id, hit,
+                    "[%s] 源占比一个都没生效：请求带 %s，实际抓到的源是 %s（两边对不上）",
+                    program.id, list(hit), got[:8],
                 )
 
         # 今日天气：不写进正片，单独合成一条当日音频（前端当日首次播放时前置；
@@ -342,8 +369,10 @@ async def generate_episode(
 
         script = _apply_meta(script)
 
-        stamp = now.strftime("%Y%m%d-%H%M")
-        audio_name = f"{program.id}-{stamp}.mp3"
+        # 文件名只用字母数字：<节目><YYYYMMDD><HHMM>.mp3（不带 - 等符号）
+        stamp = now.strftime("%Y%m%d%H%M")
+        slug = re.sub(r"[^0-9A-Za-z]", "", str(program.id)) or "episode"
+        audio_name = f"{slug}{stamp}.mp3"
         audio_path = AUDIO_DIR / audio_name
         log.info("[%s] 开始合成音频，共 %d 条，语速 %s", program.id, script["item_count"], rate)
         meta = await tts.synthesize(script, cfg, audio_path, rate=rate, voice=voice)
@@ -422,9 +451,10 @@ def cleanup(cfg: Config, store: Store) -> int:
 
     # 天气独立音频按天覆盖，但换天/换账号后会残留，顺手清掉 7 天前的
     cutoff_day = (now_local() - timedelta(days=7)).strftime("%Y%m%d")
-    for path in AUDIO_DIR.glob("weather-*.mp3"):
+    for path in AUDIO_DIR.glob("weather*.mp3"):
         try:
-            day = path.stem.rsplit("-", 1)[-1]
+            digits = "".join(ch for ch in path.stem if ch.isdigit())
+            day = digits[-8:]
             if day.isdigit() and day < cutoff_day:
                 path.unlink()
                 removed += 1

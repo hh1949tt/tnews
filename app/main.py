@@ -341,24 +341,12 @@ async def _run_generation(program_id: str, opts: GenOptions | None = None):
         }
 
 
-def _user_gen_shares(uid: int, program_id: str) -> dict[str, int] | None:
-    """读某个账号云同步的生成设置（nr_gen_<节目>），取「源占比」。
-
-    前端每次改设置都会把 nr_gen_* 快照同步到 u<uid>:prefs（/api/me/prefs），
-    所以打开页面自动补录、自动更新、定点定时都不用重新保存设置，
-    就能拿到该账号最新的占比。没存过 / 占比为空 → None（不参考）。
-    """
-    prefs = store.get_setting(f"u{int(uid)}:prefs") or {}
-    prefs = prefs.get("prefs") if isinstance(prefs, dict) and "prefs" in prefs else prefs
-    raw = (prefs or {}).get(f"nr_gen_{program_id}")
-    try:
-        saved = json.loads(raw) if isinstance(raw, str) else None
-    except (ValueError, TypeError):
-        saved = None
-    if not isinstance(saved, dict) or not isinstance(saved.get("shares"), dict):
+def _norm_shares(raw: object) -> dict[str, int] | None:
+    """把 «源 url → 百分比» 洗成干净 dict（丢掉非法值）；没有有效项 → None。"""
+    if not isinstance(raw, dict):
         return None
     clean: dict[str, int] = {}
-    for u, p in (saved.get("shares") or {}).items():
+    for u, p in raw.items():
         try:
             p = int(p)
         except (TypeError, ValueError):
@@ -368,23 +356,107 @@ def _user_gen_shares(uid: int, program_id: str) -> dict[str, int] | None:
     return clean or None
 
 
-def _admin_gen_shares(program_id: str) -> dict[str, int] | None:
-    """读管理员账号云同步的生成设置（nr_gen_<节目>），取「源占比」给定点定时用。"""
-    admin = next(
-        (u for u in store.list_users()
-         if u.get("role") == "admin" and not u.get("disabled")),
-        None,
-    )
-    if not admin:
+def _shares_from_prefs(uid: int, program_id: str) -> dict[str, int] | None:
+    """账号云同步存档（u<uid>:prefs 里的 nr_gen_<节目>）里的占比。"""
+    prefs = store.get_setting(f"u{int(uid)}:prefs") or {}
+    prefs = prefs.get("prefs") if isinstance(prefs, dict) and "prefs" in prefs else prefs
+    if not isinstance(prefs, dict):
         return None
-    return _user_gen_shares(int(admin["id"]), program_id)
+    raw = prefs.get(f"nr_gen_{program_id}")
+    if raw is None:  # 极少数旧存档会把作用域后缀一起存进来
+        raw = prefs.get(f"nr_gen_{program_id}@u{int(uid)}")
+    try:
+        saved = json.loads(raw) if isinstance(raw, str) else raw
+    except (ValueError, TypeError):
+        saved = None
+    if not isinstance(saved, dict):
+        return None
+    return _norm_shares(saved.get("shares"))
+
+
+def _shares_from_book(uid: int, program_id: str) -> dict[str, int] | None:
+    """服务端「最近一次实际生成用的占比」记录（点闪电/手动生成时自动写入）。"""
+    book = store.get_setting(f"u{int(uid)}:gen_shares") or {}
+    if not isinstance(book, dict):
+        return None
+    return _norm_shares(book.get(str(program_id)))
+
+
+def remember_gen_shares(uid: int, program_id: str, shares: object) -> None:
+    """记住这次生成实际用的占比，供补录 / 自动更新 / 定点定时复用。
+
+    浏览器里的占比只在本机；换设备、重建库、换账号后服务端存档可能为空，
+    定时任务就会「看起来占比失效」。这里把每次真正生效过的占比落一份到服务端，
+    下一次后台生成（不带占比）也能沿用。
+    """
+    got = _norm_shares(shares)
+    if not uid or not got:
+        return
+    try:
+        book = store.get_setting(f"u{int(uid)}:gen_shares") or {}
+        if not isinstance(book, dict):
+            book = {}
+        book[str(program_id)] = got
+        # 只留最近 20 个节目的记录，避免设置里无限堆积
+        book = dict(list(book.items())[-20:])
+        store.set_setting(f"u{int(uid)}:gen_shares", book)
+        log.info("已记住源占比：u%s / %s → %s", uid, program_id, got)
+    except Exception:  # 记忆失败不影响本次生成
+        log.warning("记住源占比失败（u%s / %s）", uid, program_id, exc_info=True)
+
+
+def _user_gen_shares(
+    uid: int, program_id: str, *, others: bool = False
+) -> dict[str, int] | None:
+    """取某个账号该节目要用的「源占比」，按可靠度依次回退：
+
+    ① 账号云同步的生成设置 nr_gen_<节目>（浏览器保存设置时推上来）；
+    ② 服务端记住的「上次实际用的占比」（点闪电即写入，见 remember_gen_shares）；
+    ③ others=True 时，退到任意账号（管理员优先）存过的那份——定时任务跑在
+       服务账号上，普通账号在网页里设的占比也应该生效。
+    全都没有 → None（不参考）。
+    """
+    got = _shares_from_prefs(uid, program_id) or _shares_from_book(uid, program_id)
+    if got or not others:
+        return got
+    try:
+        users = sorted(
+            (u for u in store.list_users() if not u.get("disabled")),
+            key=lambda u: (u.get("role") != "admin", int(u["id"])),
+        )
+    except Exception:
+        return None
+    for u in users:
+        if int(u["id"]) == int(uid):
+            continue
+        got = _shares_from_prefs(int(u["id"]), program_id) or _shares_from_book(int(u["id"]), program_id)
+        if got:
+            log.info("源占比：u%s 没存，改用 u%s 的设置 %s", uid, u["id"], got)
+            return got
+    return None
+
+
+def _admin_gen_shares(program_id: str) -> dict[str, int] | None:
+    """定点定时用：管理员优先，没有就退到任意账号存的占比（见 _user_gen_shares ③）。"""
+    admins = [
+        u for u in store.list_users()
+        if u.get("role") == "admin" and not u.get("disabled")
+    ]
+    if not admins:
+        return _user_gen_shares(0, program_id, others=True)
+    return _user_gen_shares(int(admins[0]["id"]), program_id, others=True)
 
 
 def _scheduled_job(program_id: str):
     async def job():
-        # 定点定时也遵循管理员保存的「源占比」：否则定时出来的期永远不按占比，
+        # 定点定时也遵循「源占比」：否则定时出来的期永远不按占比，
         # 用户在界面上设了占比会觉得「没生效」
-        await _run_generation(program_id, GenOptions(shares=_admin_gen_shares(program_id)))
+        shares = _admin_gen_shares(program_id)
+        if shares:
+            log.info("[%s] 定点定时带源占比：%s", program_id, shares)
+        else:
+            log.info("[%s] 定点定时：没有找到源占比设置，按默认分配", program_id)
+        await _run_generation(program_id, GenOptions(shares=shares))
 
     return job
 
@@ -472,8 +544,8 @@ async def _run_auto(uid: int) -> None:
     opts = GenOptions(
         categories=data.get("categories") or None,
         feeds=data.get("feeds") or None,
-        # 自动更新设置里没存占比时，回退到该账号最新的生成设置占比（与补录/定点定时一致）
-        shares=data.get("shares") or _user_gen_shares(uid, program.id),
+        # 自动更新设置里没存占比时，按 ①账号存档 → ②服务端记忆 → ③其他账号 依次回退
+        shares=data.get("shares") or _user_gen_shares(uid, program.id, others=True),
         rate=data.get("rate") or None,
         target_minutes=data.get("target_minutes") or None,
         sort=data.get("sort") or None,
@@ -481,7 +553,10 @@ async def _run_auto(uid: int) -> None:
         user_id=uid,  # 各用户的自动更新生成的节目归各自账号（管理员的那份访客可见）
         lookback_hours=hours,  # 按间隔回溯，既覆盖刚过去的这段时间，又不会和上一期大量重叠
     )
-    log.info("自动更新触发（%s）：每 %.1f 小时一期，抓取最近 %.1f 小时", u["email"], hours, hours)
+    log.info(
+        "自动更新触发（%s）：每 %.1f 小时一期，抓取最近 %.1f 小时，源占比 %s",
+        u["email"], hours, hours, opts.shares or "未设置",
+    )
     await _run_generation(program.id, opts)
 
 
@@ -981,6 +1056,10 @@ async def generate(req: GenerateReq, background: BackgroundTasks, user: dict = D
             raise HTTPException(400, "时间窗口太长，最多 7 天")
         opts.window_start, opts.window_end = start, end
 
+    # 把这次实际用的占比记到服务端：之后打开首页补录 / 自动更新 / 定点定时
+    # 即便服务端存档是空的（换设备、重建库、换账号），也能沿用这份
+    remember_gen_shares(int(user["id"]), req.program_id, req.shares)
+
     background.add_task(_run_generation, req.program_id, opts)
     return {"status": "started"}
 
@@ -1217,6 +1296,7 @@ async def set_auto(req: AutoReq, user: dict = Depends(require_user)):
     if req.shares is not None:
         # 只保留 1~100 的合法占比，空值/非法值视为不参考
         data["shares"] = {u: int(p) for u, p in req.shares.items() if 0 < int(p) <= 100} or None
+        remember_gen_shares(int(user["id"]), str(data.get("program_id") or ""), data["shares"])
     if req.rate:
         data["rate"] = req.rate
     if req.target_minutes is not None:

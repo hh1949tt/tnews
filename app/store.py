@@ -10,6 +10,8 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
+from .auth import random_token
+
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS episodes (
     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -557,7 +559,8 @@ class Store:
         """
         tok = str(self.get_user_setting(user_id, key) or "").strip()
         if not tok:
-            tok = secrets.token_urlsafe(18)
+            # 纯字母数字：令牌会直接出现在地址里，不能带 - _ 等符号
+            tok = random_token(24)
             self.set_user_setting(user_id, key, tok)
         return tok
 

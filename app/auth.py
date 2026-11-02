@@ -33,8 +33,22 @@ def verify_password(password: str, stored: str) -> bool:
         return False
 
 
+# 令牌字符集：只用字母数字，去掉 0/o/1/l/i 这类容易看错的字符。
+# 连接令牌会直接出现在地址里（/s/<token>、/feed/<token>.xml、?ext=<token>），
+# 用 token_urlsafe 会带 - 和 _，有些播客 App / 自动化在转发地址时会把它截断或转义。
+TOKEN_ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789"
+TOKEN_ALPHABET_SAFE = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+
+
+def random_token(length: int = 32, *, mixed_case: bool = False) -> str:
+    """生成纯字母数字令牌（不带 - _ 等符号）。"""
+    alphabet = TOKEN_ALPHABET_SAFE if mixed_case else TOKEN_ALPHABET
+    return "".join(secrets.choice(alphabet) for _ in range(int(length)))
+
+
 def new_token() -> str:
-    return secrets.token_urlsafe(32)
+    """登录口令（请求头里的那种）。"""
+    return random_token(40, mixed_case=True)
 
 
 def random_password(length: int = 12) -> str:

@@ -1012,7 +1012,10 @@ async function hydratePrefs(){
     await pushPrefsNow();
     return;
   }
-  if (serverTs && serverTs <= localTs) return;   // 本机这份更新，保留本机
+  if (serverTs && serverTs <= localTs){          // 本机这份更新，保留本机
+    queuePrefsPush();                            // 顺手把本机较新的设置推上去（含源占比）
+    return;
+  }
   // 账号存档更新（换域名登录就是走这条）：写回本机作用域键后重新应用
   try {
     for (const k of Object.keys(server)){
@@ -1025,6 +1028,7 @@ async function hydratePrefs(){
   applyPrefScope(true);     // 背景音乐 / 睡眠暂停 / 播放顺序
   try { loadPrefs(); } catch(e){}     // 生成设置（分类/时长/音色/源占比…）
   try { renderSheet(); } catch(e){}
+  queuePrefsPush();         // 合并结果回推一次，保证服务端存档里的占比是最新的
 }
 
 const state = {
@@ -1178,6 +1182,22 @@ function resetIdentityState(){
 function applyPrefScope(force){
   const want = (state.user && state.user.uid) ? ('u' + state.user.uid) : '';
   if (!force && prefScope === want) return;
+  // 首次登录：把「登录前」存的无后缀设置搬到账号作用域里。
+  // 不搬的话，登录前调好的分类/源占比在账号下读不到，云同步推上去也是空的，
+  // 后台定时生成拿不到占比（浏览器点闪电却正常，看着像「占比时好时坏」）。
+  if (want){
+    try {
+      const st = localStorage, moved = [];
+      for (let i = 0; i < st.length; i++){
+        const k = st.key(i);
+        if (!k || k.indexOf('nr_') !== 0 || k.indexOf('@') >= 0) continue;
+        if (!prefSyncableKey(k)) continue;
+        if (st.getItem(k + '@' + want) === null) moved.push(k);
+      }
+      moved.forEach(k => st.setItem(k + '@' + want, st.getItem(k)));
+      if (moved.length) setTimeout(() => { try { queuePrefsPush(); } catch(e){} }, 1200);
+    } catch(e){}
+  }
   prefScope = want;
   try {
     if (state.user && state.user.uid) localStorage.setItem('nr_uid', String(state.user.uid));

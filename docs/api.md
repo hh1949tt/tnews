@@ -25,7 +25,7 @@
 
 | 接口 | 返回 | 用途 |
 |---|---|---|
-| `GET /health` | `{"ok":true,"version":"1.0.1","time":"..."}` | 探活、确认版本 |
+| `GET /health` | `{"ok":true,"version":"1.0.2","time":"..."}` | 探活、确认版本 |
 | `GET /api/latest` | 最新一期的最小信息 | HA REST sensor、脚本判断有没有新一期 |
 | `GET /api/latest/content` | 最新一期的完整内容 | 仪表盘显示全文 / 标题清单 |
 | `GET /api/programs` | 节目清单 + 各自最新一期 | 确认 `program_id` 该写什么 |
@@ -33,6 +33,8 @@
 | `GET /audio/<文件名>` | 音频文件 | 直链播放（加 `?inline=1` 为内联流式） |
 | `GET /feed.xml` | 播客 RSS（全站合集） | 播客 App 订阅 |
 | `GET /feed/<令牌>.xml` | 播客 RSS（单账号） | 播客 App 订阅 |
+
+> 命名约定：音频文件名形如 `morning202611020830.mp3`（节目 id + `YYYYMMDD` + `HHMM`，只用字母数字），各类令牌（登录口令、`ext`、`sub`、播客令牌）也只用字母数字，不带 `-` `_` 等符号，避免转发/转义时被截断。
 
 通用参数：
 
@@ -60,7 +62,7 @@ curl "http://NAS:18282/api/latest?ext=EXTERNAL_TOKEN"       # 某账号的最新
   "created_at": "2026-11-01T20:21:00",
   "duration": 280.0,
   "item_count": 14,
-  "url": "http://NAS:18282/audio/20261101-2021-56.mp3",
+  "url": "http://NAS:18282/audio/morning202611012156.mp3",
   "latest_mp3": "http://NAS:18282/latest.mp3",
   "feed": "http://NAS:18282/feed.xml"
 }
@@ -87,7 +89,7 @@ curl "http://NAS:18282/api/latest/content?program_id=morning"
      "link": "https://…", "start": 12.84}
   ],
   "weather": {"text": "杭州 15 度 有雾", "start": 0.5},
-  "url": "http://NAS:18282/audio/20261101-2021-56.mp3"
+  "url": "http://NAS:18282/audio/morning202611012156.mp3"
 }
 ```
 
@@ -134,8 +136,8 @@ home_assistant:
   "created_at": "2026-11-01T20:21:00",
   "duration": 280.0,
   "item_count": 14,
-  "audio_file": "20261101-2021-56.mp3",
-  "url": "http://192.168.1.100:18282/audio/20261101-2021-56.mp3",
+  "audio_file": "morning202611012156.mp3",
+  "url": "http://192.168.1.100:18282/audio/morning202611012156.mp3",
   "latest_mp3": "http://192.168.1.100:18282/latest.mp3"
 }
 ```
