@@ -35,7 +35,7 @@ docker run -d --name tnews --restart always -p 18282:18282 \
   ghcr.io/hh1949tt/tnews:latest
 ```
 
-镜像标签规则：`v1.0.4` → `1.0.4`、`1.0`、`latest` 三个标签同时更新。首次从 GHCR 拉取需要在 https://github.com/hh1949tt/tnews/pkgs/container/tnews 把 Package 可见性设为 Public（跟随仓库，一般首次发布时自动继承），私有仓库则先 `docker login ghcr.io`。
+镜像标签规则：`v1.0.5` → `1.0.5`、`1.0`、`latest` 三个标签同时更新。首次从 GHCR 拉取需要在 https://github.com/hh1949tt/tnews/pkgs/container/tnews 把 Package 可见性设为 Public（跟随仓库，一般首次发布时自动继承），私有仓库则先 `docker login ghcr.io`。
 
 ### 1.1 用 git 拉取
 
@@ -48,9 +48,9 @@ docker compose up -d --build
 
 ### 1.2 手动下载压缩包（没有 git、或不想装 git）
 
-在电脑上下载 Release 里的 `tnews-<版本>.zip` / `.tar.gz`，上传到服务器解压即可。也可以在服务器上直接下（把 `v1.0.4` 和账号换成实际值）：
+在电脑上下载 Release 里的 `tnews-<版本>.zip` / `.tar.gz`，上传到服务器解压即可。也可以在服务器上直接下（把 `v1.0.5` 和账号换成实际值）：
 
-> 仓库还没打 tag 时，把 `refs/tags/v1.0.4` 换成 `refs/heads/main`，或者在网页上 **Code → Download ZIP**。归档包里不含 `data/`、`dist/`、`.env`，正好就是部署需要的那些文件。
+> 仓库还没打 tag 时，把 `refs/tags/v1.0.5` 换成 `refs/heads/main`，或者在网页上 **Code → Download ZIP**。归档包里不含 `data/`、`dist/`、`.env`，正好就是部署需要的那些文件。
 
 > **仓库是私有的？** 上面这些地址都要登录，NAS 上 `wget` 会返回 404。改成「本机打包再传」：
 >
@@ -68,12 +68,12 @@ docker compose up -d --build
 mkdir -p /opt/tnews && cd /opt/tnews
 
 # 下载并解压（二选一）
-wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.4.tar.gz
+wget -O tnews.tar.gz https://github.com/hh1949tt/tnews/archive/refs/tags/v1.0.5.tar.gz
 tar -xzf tnews.tar.gz --strip-components=1
 
 # 或者从本地上传后解压
-# scp tnews-1.0.4.tar.gz user@服务器:/opt/tnews/
-# tar -xzf tnews-1.0.4.tar.gz
+# scp tnews-1.0.5.tar.gz user@服务器:/opt/tnews/
+# tar -xzf tnews-1.0.5.tar.gz
 
 cp .env.example .env        # 可选
 docker compose up -d --build
@@ -95,9 +95,9 @@ docker compose up -d --build
 几个容易踩的点：
 
 - **别把 `data/` 一起打包上传**。它是运行数据（数据库 + 音频），覆盖会丢节目；新机器上让它自己生成。
-- 压缩包若带一层目录（如 `tnews-1.0.4/`），要么用 `--strip-components=1` 拆掉，要么 `cd` 进去再 `docker compose up`；`docker-compose.yml` 里的 `build: .` 指的是**当前目录**，目录不对会报 `failed to read Dockerfile`。
+- 压缩包若带一层目录（如 `tnews-1.0.5/`），要么用 `--strip-components=1` 拆掉，要么 `cd` 进去再 `docker compose up`；`docker-compose.yml` 里的 `build: .` 指的是**当前目录**，目录不对会报 `failed to read Dockerfile`。
 - Windows 上解压后拷到 Linux 会带上 CRLF，`docker compose` 会报 `env file ... contains invalid characters`——用 `dos2unix .env` 或编辑器切回 LF。
-- Windows 本地解压：`Expand-Archive tnews-1.0.4.zip -DestinationPath C:\tnews`，再整体拷到服务器；`config.yaml` / `.env` 别用记事本改（会存成带 BOM 的 UTF-8），用 VS Code 存「UTF-8 无 BOM」。
+- Windows 本地解压：`Expand-Archive tnews-1.0.5.zip -DestinationPath C:\tnews`，再整体拷到服务器；`config.yaml` / `.env` 别用记事本改（会存成带 BOM 的 UTF-8），用 VS Code 存「UTF-8 无 BOM」。
 - 手动部署的升级就是「下载新包 → 覆盖 `app/ web/ config.yaml Dockerfile requirements.txt`（保留 `data/`）→ `docker compose up -d --build`」，见[升级](#升级)。
 
 ### 1.3 在别的机器上构建，把镜像拷过去
@@ -252,21 +252,37 @@ server:
 
 ## 升级
 
-代码在镜像里，**只覆盖文件不动镜像是不会生效的**。升级完都要 `--build` 重建，最后看 `/health` 里的版本号确认。配置了 `repo_url` 且仓库公开时，管理员在「设置 → 全局管理 → 版本更新」里能直接看到有没有新版。
+代码在镜像里，**只覆盖文件不动镜像是不会生效的**。最后都看 `/health` 里的版本号确认。配置了 `repo_url` 且仓库公开时，管理员在「设置 → 全局管理 → 版本更新」里能直接看到有没有新版。
+
+按你怎么部署的分两种，别用错方法：
+
+### 镜像部署（1.0 方式：只有 compose + config.yaml）
 
 ```bash
-cd /path/to/tnews
-docker compose down                       # 或不停机直接下一步
-docker tag tnews:latest tnews:old         # 留个回滚点（可选）
-curl http://127.0.0.1:18282/health        # {"ok":true,"version":"x.y.z",...}
+cd /opt/tnews
+docker compose pull                    # ① 必须单独 pull，见下方说明
+docker compose up -d                   # ② 镜像 digest 变了会自动重建容器
+curl -s http://127.0.0.1:18282/health
 ```
 
-**git 部署**的，更新源码再重建：
+输出形如 `{"ok":true,"version":"1.0.5","build":"a1b2c3d","built_at":"2026-11-02T02:48:20Z",...}`。
+`build` 是镜像对应的 git commit，和 Release 页上该 tag 的 commit 一致，就说明跑的确实是新镜像。
+
+> **为什么必须显式 `pull`：**Compose 默认 `pull_policy: missing`——本地已经有 `:latest` 这个标签时，
+> `docker compose up -d` **不会**去远端比较 digest，直接拿旧镜像起容器。v1.0.5 起仓库里的
+> `docker-compose.yml` 已加 `pull_policy: always`，用这份能省掉第 ① 步；
+> 但**你机器上那份旧的 compose 文件不会自动变**，升级时请顺手更新它，或者老老实实先 `docker compose pull`。
+
+### 源码部署（1.1 git / 1.2 压缩包）
 
 ```bash
-git pull
+git pull                               # 或覆盖 app/ web/ Dockerfile requirements.txt
 docker compose up -d --build
+curl -s http://127.0.0.1:18282/health
 ```
+
+⚠️ **源码部署的机器千万别对着旧源码跑 `--build`**：它会把本地 `ghcr.io/hh1949tt/tnews:latest`
+这个标签改写成「你用旧代码构建出来的镜像」，之后既看不出镜像有没有更新，也容易把旧代码当成新版。
 
 **手动压缩包部署**的，下载新版本覆盖（`data/` 千万别动）：
 
@@ -281,6 +297,32 @@ diff -u config.yaml /tmp/tnews-new/config.yaml | head -40
 docker compose up -d --build
 ```
 
+### 升级后还是旧版本？按顺序查
+
+```bash
+# 1. 远端现在到底是什么（对照 GitHub 上 v1.0.5 / v1.0.5 的构建时间）
+docker image inspect ghcr.io/hh1949tt/tnews:latest \
+  --format '{{.Created}} {{index .Config.Labels "org.opencontainers.image.version"}}'
+
+# 2. 容器实际在跑哪个镜像 ID
+docker inspect tnews --format '{{.Image}} {{.Created}}'
+
+# 3. 容器里的真实版本（最权威，绕开网页缓存和反代）
+docker exec tnews python -c "import urllib.request;print(urllib.request.urlopen('http://127.0.0.1:18282/health').read().decode())"
+```
+
+| 现象 | 原因 | 处理 |
+|---|---|---|
+| 镜像 `Created` 还是旧时间 | 只 `up -d` 没 `pull`（默认 missing 策略） | `docker compose pull`，或给 compose 加 `pull_policy: always` |
+| 镜像时间是「你本地构建的时间」 | 之前跑过 `--build`，本地 tag 被覆盖 | `docker image rm ghcr.io/hh1949tt/tnews:latest` 再 `docker compose pull` |
+| 镜像新了、容器 `Created` 还是旧 | 容器没重建 | `docker compose up -d --force-recreate` |
+| 容器内 `/health` 是新版、网页显示旧 | 浏览器/反代缓存 | 强制刷新，或看 `/health` 与「设置 → 全局管理 → 版本更新」 |
+| 群晖 Container Manager | 图形界面只更新了「latest」标记，没重建容器 | 停止容器 → 映像里删掉旧 latest → 重新下载 → 用原配置启动 |
+
+```bash
+docker tag ghcr.io/hh1949tt/tnews:latest tnews:rollback   # 升级前留个回滚点（可选）
+```
+
 **只要镜像、不要源码**的（1.3 那种），把新镜像 `docker load` 进来后 `docker compose up -d` 即可，不需要 `--build`。
 
 只更新部分文件时，安全的做法是打包时排除 `data/`：
@@ -293,10 +335,13 @@ tar --exclude=data --exclude=__pycache__ --exclude='*.pyc' \
 ### 回滚
 
 ```bash
-docker compose down
-docker tag tnews:old tnews:latest
-docker compose up -d
+# 升级前：docker tag ghcr.io/hh1949tt/tnews:latest tnews:rollback
+docker tag tnews:rollback ghcr.io/hh1949tt/tnews:latest
+docker compose up -d --pull never --force-recreate   # 必须加 --pull never
 ```
+
+> `pull_policy: always` 时 `up` 会先把本地 tag 重新 pull 回来，等于把刚恢复的旧镜像又盖掉；
+> 回滚必须带 `--pull never`。
 
 配置改坏了就用备份顶回去（见下）。
 
@@ -335,3 +380,4 @@ data/
 | 局域网其他设备打不开 | 端口映射是否写成 `"18282:18282"`；宿主防火墙放通端口 |
 | 播客里的音频放不了 | `public_base_url` 是否填了对方能访问到的地址 |
 | Home Assistant 播不了 | HA 容器里别用 `localhost`，要用 NAS 的局域网 IP |
+| 发了新版本，`up -d` 完还是旧版 | 见[升级后还是旧版本](#升级后还是旧版本按顺序查)；八成是没先 `docker compose pull`（Compose 默认本地有同 tag 就不拉） |

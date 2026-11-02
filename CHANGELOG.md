@@ -2,6 +2,22 @@
 
 本项目版本号遵循[语义化版本](https://semver.org/lang/zh-CN/)，更新记录按 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/) 的格式维护。
 
+## [1.0.5] - 2026-11-02
+
+### 新增
+
+- 镜像内写入构建指纹：CI 构建时把 tag 对应的 commit 与构建时间塞进镜像，`/health` 返回 `build`（commit 短哈希）和 `built_at`。以后 pull 完只要看一眼 `/health`，就能确认跑的到底是不是新镜像，不用再猜
+
+### 变更
+
+- `docker-compose.yml` 增加 `pull_policy: always`：`docker compose up -d` 现在会先去 GHCR 比对 digest。此前是 Compose 默认的 `missing` 策略——本地已有 `:latest` 标签就完全不查远端，**这是「Release 发了新镜像、`up -d` 完还是旧版本」的根本原因**。离线环境可注释掉这一行
+
+### 文档
+
+- 部署文档「升级」按部署方式拆开：镜像部署（`pull` + `up -d`）与源码部署（`--build`），并标明源码机器跑 `--build` 会把本地 `:latest` 改写成旧代码构建的镜像
+- 新增「升级后还是旧版本？按顺序查」：镜像 `Created`、容器镜像 ID、容器内 `/health` 三条命令 + 现象对照表（含群晖 Container Manager）
+- 回滚命令补 `--pull never`，否则 `pull_policy: always` 会把刚恢复的旧镜像又拉回新版
+
 ## [1.0.4] - 2026-11-02
 
 ### 修复

@@ -31,6 +31,10 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 log = logging.getLogger("tnews")
 
 VERSION = __version__  # 版本号只改 app/__init__.py；部署后打开 /health 就能确认跑的是不是新版
+# 镜像构建指纹：由 Dockerfile/CI 在构建时写进环境变量。源码部署时为 dev/空。
+# 用途：pull 完不确定是不是新镜像时，比对 /health 里的 build 与 GitHub 上该 tag 的 commit。
+BUILD_SHA = (os.environ.get("TNEWS_BUILD_SHA") or "").strip() or "dev"
+BUILD_TIME = (os.environ.get("TNEWS_BUILD_TIME") or "").strip()
 cfg = load_config()
 app = FastAPI(title=cfg.app_name, version=VERSION)
 
@@ -1631,7 +1635,11 @@ async def admin_delete_user(user_id: int, user: dict = Depends(require_admin)):
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "version": VERSION, "time": now_local().isoformat(timespec="seconds")}
+    out = {"ok": True, "version": VERSION, "time": now_local().isoformat(timespec="seconds")}
+    if BUILD_SHA != "dev":
+        out["build"] = BUILD_SHA[:7]      # 镜像对应的 git commit 短哈希
+        out["built_at"] = BUILD_TIME      # 镜像构建时间（UTC）
+    return out
 
 
 # ---------------------------- 音频与播客 ----------------------------

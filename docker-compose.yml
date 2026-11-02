@@ -2,7 +2,13 @@ services:
   tnews:
     # 默认拉取 GHCR 上的现成镜像，不用本地构建；
     # 想本地构建就：docker compose up -d --build（会忽略远程镜像，按 Dockerfile 构建）
+    # 注意 --build 会把本地的 :latest 标签改成「你当前源码构建的版本」，
+    # 之后再看镜像时间就是本地构建时间，容易误以为远程镜像没更新。
     image: ghcr.io/hh1949tt/tnews:latest
+    # Compose 默认 pull_policy=missing：本地已有同 tag 镜像时，up -d 根本不去远端检查，
+    # 这就是「Release 发了新镜像、up -d 完还是旧版本」的原因。always 表示每次 up 都先 pull。
+    # 完全离线、或拉不动 GHCR 的机器，把下面这行注释掉改回默认行为。
+    pull_policy: always
     build: .
     container_name: tnews
     restart: always
