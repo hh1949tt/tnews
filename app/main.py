@@ -265,6 +265,7 @@ class GenerateReq(BaseModel):
     shares: dict[str, int] | None = None  # 源 url → 占比%（1~100）；空/缺 = 不参考
     run_km: float | None = None       # 跑步模式：距离（公里）
     run_minutes: float | None = None  # 跑步模式：预计用时（分钟）；两者都给则按用时生成
+    filter_words: list[str] | str | None = None  # 过滤词：'a|b' 或列表；只在音频里跳过，文字稿保留
 
 
 # 页面上可选的音色（男 / 女声）
@@ -288,6 +289,7 @@ class AutoReq(BaseModel):
     sort: str | None = None  # 播报顺序
     voice: str | None = None  # 每期音色
     shares: dict[str, int] | None = None  # 源占比
+    filter_words: list[str] | str | None = None  # 过滤词：'a|b' 或列表；只在音频里跳过
     reschedule: bool = True  # False = 只更新参数，不重置下次执行时间（手动生成后同步用）
 
 
@@ -469,6 +471,19 @@ def _prefs_snapshot(uid: int, program_id: str) -> dict:
     return snap if isinstance(snap, dict) else {}
 
 
+def _norm_filter_words(v) -> list[str]:
+    """过滤词归一化：接受 'a|b' 字符串或列表，去空白去重，最多 20 个、单个最长 30 字。"""
+    if v is None:
+        return []
+    items = v if isinstance(v, (list, tuple)) else str(v).split("|")
+    out: list[str] = []
+    for w in items:
+        w = str(w).strip()
+        if w and w not in out:
+            out.append(w[:30])
+    return out[:20]
+
+
 def _snapshot_fields(src: dict) -> dict:
     """把前端快照（camelCase）或自动更新设置（snake_case）统一成 GenOptions 字段。"""
     if not isinstance(src, dict):
@@ -511,6 +526,12 @@ def _snapshot_fields(src: dict) -> dict:
             out["max_items"] = mi
     except (TypeError, ValueError):
         pass
+
+    # 过滤词：快照里是 camelCase（filterWords，'a|b' 字符串），auto 副本里是 snake_case（列表）
+    fw = src.get("filterWords") if src.get("filterWords") is not None else src.get("filter_words")
+    fw = _norm_filter_words(fw)
+    if fw:
+        out["filter_words"] = fw
 
     return out
 
@@ -601,6 +622,8 @@ def _describe_opts(opts: GenOptions) -> str:
         "排序 %s" % (opts.sort or "默认"),
         "占比 %s" % (opts.shares or "未设置"),
     ]
+    if opts.filter_words:
+        bits.append("过滤词 %d 个" % len(opts.filter_words))
     if opts.lookback_hours:
         bits.append("回溯 %.1f 小时" % opts.lookback_hours)
     return " · ".join(bits)
@@ -639,6 +662,7 @@ AUTO_DEFAULTS: dict = {
     "target_minutes": None,
     "sort": None,
     "voice": None,
+    "filter_words": None,  # 过滤词列表；None = 跟随设置面板
 }
 
 
@@ -1177,6 +1201,12 @@ async def generate(req: GenerateReq, background: BackgroundTasks, user: dict = D
     if STATE.get(req.program_id, {}).get("status") == "running":
         return {"status": "running", "message": "正在生成中"}
 
+    # 过滤词：请求里带了就用请求的（显式空 = 不过滤）；没带（老前端/第三方调用）回退账号快照
+    if "filter_words" in req.model_fields_set:
+        fw = _norm_filter_words(req.filter_words)
+    else:
+        fw = _snapshot_fields(_prefs_snapshot(int(user["id"]), req.program_id)).get("filter_words") or []
+
     opts = GenOptions(
         categories=req.categories,
         feeds=req.feeds,
@@ -1188,6 +1218,7 @@ async def generate(req: GenerateReq, background: BackgroundTasks, user: dict = D
         voice=req.voice,
         lookback_hours=req.lookback_hours,
         user_id=int(user["id"]),
+        filter_words=fw,
     )
     if req.run_km is not None or req.run_minutes is not None:
         # 跑步模式：距离 + 用时 → 按用时生成，并在节目里记下配速供播放端显示
@@ -1479,6 +1510,8 @@ async def set_auto(req: AutoReq, user: dict = Depends(require_user)):
         if req.voice and req.voice not in VOICES:
             raise HTTPException(400, "不支持的音色")
         data["voice"] = req.voice or None
+    if "filter_words" in explicit:
+        data["filter_words"] = _norm_filter_words(req.filter_words) or None
 
     store.set_setting(auto_setting_key(uid), data)
     if req.reschedule or (data["enabled"] and scheduler.get_job(auto_job_id(uid)) is None):
@@ -2111,6 +2144,7 @@ async def admin_gen_options(program_id: str = "", user: dict = Depends(require_a
             "target_minutes": o.target_minutes,
             "max_items": o.max_items,
             "shares": o.shares,
+            "filter_words": o.filter_words,
             "lookback_hours": o.lookback_hours,
             "user_id": o.user_id,
         }

@@ -36,6 +36,7 @@ class GenOptions:
     user_id: int | None = None  # 属于哪个用户（None = 兼容老数据/管理员）
     shares: dict[str, int] | None = None  # 源 url → 占比%（1~100）；空 = 不参考
     run_km: float | None = None  # 跑步模式：距离（公里）；与 target_minutes 一起生成节奏贴合的节目
+    filter_words: list[str] | None = None  # 过滤词：只在音频里跳过这些词，文字稿保留原文
 
 
 _running: set[str] = set()
@@ -413,8 +414,12 @@ async def generate_episode(
         slug = re.sub(r"[^0-9A-Za-z]", "", str(program.id)) or "episode"
         audio_name = f"{slug}{stamp}.mp3"
         audio_path = AUDIO_DIR / audio_name
+        if opts.filter_words:
+            log.info("[%s] 音频过滤词 %d 个：%s（文字稿保留原文）",
+                     program.id, len(opts.filter_words), "、".join(opts.filter_words[:8]))
         log.info("[%s] 开始合成音频，共 %d 条，语速 %s", program.id, script["item_count"], rate)
-        meta = await tts.synthesize(script, cfg, audio_path, rate=rate, voice=voice)
+        meta = await tts.synthesize(script, cfg, audio_path, rate=rate, voice=voice,
+                                    filter_words=opts.filter_words)
 
         # 跑步模式硬保障：合成完实测时长仍短于总用时 → 按缺口补条数（必要时再扩窗）重新合成，
         # 宁可超过总用时也不能短；最多补 3 轮，仍不足就按实际结果入库并记日志。
@@ -450,7 +455,8 @@ async def generate_episode(
                 )
                 max_items = new_cap
                 script = _apply_meta(script)
-                meta = await tts.synthesize(script, cfg, audio_path, rate=rate, voice=voice)
+                meta = await tts.synthesize(script, cfg, audio_path, rate=rate, voice=voice,
+                                            filter_words=opts.filter_words)
             if meta["duration"] < need:
                 log.warning("[%s] 跑步模式补 %d 轮后仍 %.0f 秒 < %.0f 秒，素材不足，按实际时长入库",
                             program.id, 3, meta["duration"], need)

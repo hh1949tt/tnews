@@ -168,6 +168,25 @@ def _sanitize_for_tts(text: str) -> str:
     return out.strip()
 
 
+def _strip_filter_words(text: str, words: list[str] | None) -> str:
+    """从 TTS 文本里删掉过滤词（文字稿保留原文，网页/接口里还能看到）。
+
+    例：过滤词「阅读全文」，'AAAAAAAAAA阅读全文BBBBBBBB' → 'AAAAAAAAAABBBBBBBB'。
+    长词先删（避免「阅读」先吃掉「阅读全文」），删完顺手清掉残留的空标点/连续标点。
+    """
+    if not words:
+        return text
+    import re
+
+    for w in sorted({str(w).strip() for w in words if str(w).strip()}, key=len, reverse=True):
+        text = text.replace(w, "")
+    text = re.sub(r"\s+", " ", text)
+    # 删词可能留下「。，」这类连续标点或首尾孤标点，清掉；单标点保留维持停顿
+    text = re.sub(r"([，。、：；！？])[，。、：；！？\s]+", r"\1", text)
+    text = re.sub(r"^[，。、：；！？\s]+|[，。、：；！？\s]+$", "", text)
+    return text.strip()
+
+
 async def _synth_once(text: str, voice: str, rate: str, volume: str, pitch: str) -> tuple[bytes, float]:
     # 显式要求词级边界，才能拿到精确的段落起始时间
     comm = edge_tts.Communicate(
@@ -210,9 +229,14 @@ async def _synth_with_retry(
 
 
 async def synthesize(
-    script: dict, cfg: Config, out_path: Path, rate: str | None = None, voice: str | None = None
+    script: dict, cfg: Config, out_path: Path, rate: str | None = None, voice: str | None = None,
+    filter_words: list[str] | None = None,
 ) -> dict:
-    """合成整期节目，返回时长与章节时间轴。"""
+    """合成整期节目，返回时长与章节时间轴。
+
+    filter_words：只在**音频**里跳过这些词，script 里存的原样文字不动——
+    网页、接口、清单里仍能看到全文，只有念出来的部分被删。
+    """
     segments = script["segments"]
     gap = float(cfg.tts.get("gap_seconds", 0.4))
     max_seg_chars = int(cfg.tts.get("max_chars_per_segment", 300))
@@ -220,7 +244,7 @@ async def synthesize(
     # 过长的段落按句切分，避免单次请求过大
     jobs: list[tuple[int, str]] = []
     for idx, seg in enumerate(segments):
-        text = _sanitize_for_tts(seg["text"])
+        text = _strip_filter_words(_sanitize_for_tts(seg["text"]), filter_words)
         if not text:
             jobs.append((idx, ""))
             continue
