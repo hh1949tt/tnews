@@ -1942,11 +1942,23 @@ async def get_my_prefs(user: dict = Depends(require_user)):
 
 @app.put("/api/me/prefs")
 async def set_my_prefs(req: dict, user: dict = Depends(require_user)):
-    """整体覆盖保存（前端每次改动 800ms 防抖后推一次全量快照）。"""
+    """按键合并保存：请求里带的键覆盖同名键，**没带的键保留原值**。
+
+    以前是整体覆盖——任何一台本机没有生成设置的设备（清过缓存、换浏览器）
+    打开页面，800ms 防抖推送就会把账号存档里的生成快照（目标时长/分类/占比…）
+    冲掉，之后自动更新/定点定时/首页补录读不到设置，按默认值生成
+    （表现为「设置了 2 分钟，自动生成却是 10 分钟」）。
+    想全量替换可带 replace=true（逃生门，目前前端不用）。
+    """
     raw = req.get("prefs")
     if not isinstance(raw, dict):
         raise HTTPException(400, "prefs 必须是对象")
-    clean: dict[str, str] = {}
+    key = f"u{int(user['id'])}:prefs"
+    old = store.get_setting(key) or {}
+    old_prefs = old.get("prefs") if isinstance(old, dict) and "prefs" in old else old
+    clean: dict[str, str] = dict(old_prefs) if isinstance(old_prefs, dict) else {}
+    if req.get("replace"):
+        clean = {}
     for k, v in list(raw.items())[:300]:
         if not isinstance(k, str) or not k.startswith("nr_") or len(k) > 80:
             continue
@@ -1960,8 +1972,12 @@ async def set_my_prefs(req: dict, user: dict = Depends(require_user)):
         ts = int(req.get("ts") or 0)
     except (TypeError, ValueError):
         ts = 0
-    store.set_setting(f"u{int(user['id'])}:prefs", {"prefs": clean, "ts": ts})
-    return {"ok": True, "count": len(clean), "ts": ts}
+    try:
+        old_ts = int(old.get("ts") or 0) if isinstance(old, dict) else 0
+    except (TypeError, ValueError):
+        old_ts = 0
+    store.set_setting(key, {"prefs": clean, "ts": max(ts, old_ts)})
+    return {"ok": True, "count": len(clean), "ts": max(ts, old_ts)}
 
 
 @app.get("/api/me/external")

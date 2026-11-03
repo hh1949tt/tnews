@@ -998,8 +998,15 @@ function queuePrefsPush(){
 async function pushPrefsNow(){
   clearTimeout(prefPushTimer); prefPushTimer = null;
   if (!state.user) return;
-  const prefs = localPrefsSnapshot();
+  let prefs = localPrefsSnapshot();
   const ts = Date.now();
+  try {
+    // 键级合并：本机没有的键保留服务端的——清过缓存/换浏览器的设备若推空快照，
+    // 会把账号存档里的生成设置（目标时长/分类/占比…）冲掉，自动更新就按默认跑了
+    const r = await api('/api/me/prefs');
+    const server = (r && r.prefs && typeof r.prefs === 'object') ? r.prefs : {};
+    if (Object.keys(server).length) prefs = Object.assign({}, server, prefs);
+  } catch(e){}
   try {
     await api('/api/me/prefs', {
       method: 'PUT', headers: {'Content-Type':'application/json'},
@@ -3939,7 +3946,7 @@ async function renderMyExt(){
   }
   hint.innerHTML = ''
     + (!st.enabled ? '' : (st.global_enabled ? '' : '管理员总开关未打开，地址暂时无法访问'))
-    + (st.legacy ? '<br>当前令牌含 - _ 等符号，点「换新令牌」可换成纯字母数字（换完要同步改 Home Assistant / Node-RED 里的 ext=）' : '');
+    + (st.legacy ? '<br>当前令牌含 - _ 等符号，点「换新令牌」可换成纯字母数字（旧地址随即失效）' : '');
 }
 
 $('#btnLogout').onclick = async () => {
