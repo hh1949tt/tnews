@@ -30,4 +30,4 @@ node tools/check_flow.cjs      # 动过 extras/ 或 tools/build_flow_config.py �
 
 ## 许可证
 
-提交 PR 即表示同意以 [MIT](LICENSE) 许可发布你的贡献。
+提交 PR 即表示同意以 [PolyForm Noncommercial 1.0.0](LICENSE) 许可发布你的贡献（禁止商用，与项目保持一致）。

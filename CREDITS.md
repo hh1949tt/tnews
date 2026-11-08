@@ -1,6 +1,6 @@
 # 第三方依赖与素材
 
-本仓库的**代码**按 [MIT](LICENSE) 许可发布；下面这些内容各有自己的许可，随仓库分发时需一并保留声明。相关合规分析见 [docs/legal.md](docs/legal.md)。
+本仓库的**代码**按 [PolyForm Noncommercial 1.0.0](LICENSE) 许可发布（**禁止商用**，个人与非商业用途自由使用）；下面这些内容各有自己的许可，随仓库分发时需一并保留声明。相关合规分析见 [docs/legal.md](docs/legal.md)。
 
 ## 运行依赖
 
@@ -16,7 +16,7 @@
 | [edge-tts](https://github.com/rany2/edge-tts) | ≥7.3.1 | **LGPL-3.0**（其中 `srt_composer.py` 为 MIT） | 语音合成 |
 | [zhconv](https://github.com/gumblex/zhconv) | 1.4.3 | MIT（见下方说明） | 繁简转换 |
 
-> **关于 edge-tts**：LGPL-3.0 允许在 MIT 项目中作为独立依赖使用，条件是使用者可以自行替换这个库（本项目直接 `pip install`，满足这一条）。修改 `edge_tts` 源码再分发时，修改部分需按 LGPL 公开。
+> **关于 edge-tts**：LGPL-3.0 允许在采用其它许可（含本项目这种非商业许可）的项目中作为独立依赖使用，条件是使用者可以自行替换这个库（本项目直接 `pip install`，满足这一条）。修改 `edge_tts` 源码再分发时，修改部分需按 LGPL 公开。
 >
 > **关于 zhconv**：发布包（wheel）里的 `LICENSE` 文件是 MIT，但包元数据的 classifier 写的是 `GPLv2+`，其转换表部分源自 MediaWiki 的中文转换表。这种「声明不一致」属于上游历史遗留，实际项目普遍按 MIT 对待；如果所在组织对许可证审计严格，可以换成 Apache-2.0 的 [OpenCC](https://github.com/BYVoid/OpenCC)（`opencc-python-reimplemented`）。
 
