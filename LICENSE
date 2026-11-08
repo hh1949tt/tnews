@@ -5,28 +5,6 @@ Copyright (c) 2026 TNews contributors
 
 Required Notice: Copyright (c) 2026 TNews contributors
 
-------------------------------------------------------------------
-中文要点（便于理解，条款以本文件下方的英文正文为准）
-
-允许：
-- 个人学习、研究、试验、家庭收听、业余爱好项目使用
-- 修改代码、二次开发，修改版同样只能用于非商业目的
-- 在非商业前提下分发原版或修改版（须附带本许可与版权声明）
-- 慈善机构、学校、公立科研机构、公共安全与卫生机构、环保组织、
-  政府机构使用（不论经费来源）
-
-禁止：
-- 任何商业用途。包括但不限于：出售本软件或其修改版；收费托管、
-  SaaS、订阅或按次收费；靠广告、赞助、导流变现；在企业内部用于
-  生产经营；以本软件为基础提供有偿服务或咨询交付。
-- 把本软件或其修改版转为 MIT、Apache 等允许商用的许可再发布。
-
-其它：
-- 分发时必须一并提供本许可全文（或上面的许可网址）与 Required Notice 行。
-- 软件按「现状」提供，不附带任何担保；作者不对使用后果承担责任。
-- 想商用请先联系版权方取得书面商业授权。
-------------------------------------------------------------------
-
 ## Acceptance
 
 In order to get any license under these terms, you must agree to them as both strict obligations and conditions to all your licenses.
@@ -96,11 +74,3 @@ The **licensor** is the individual or entity offering these terms, and the **sof
 **Your licenses** are all the licenses granted to you for the software under these terms.
 
 **Use** means anything you do with the software requiring one of your licenses.
-
-------------------------------------------------------------------
-第三方资源说明：
-
-- 背景音乐（web/bgm/*.mp3）：Kevin MacLeod (incompetech.com)，CC BY 4.0。
-- 新闻内容：版权归各媒体所有，本项目仅做摘要转述，不存储原文全文。
-- 第三方依赖：各依赖保持其原有许可（详见 CREDITS.md），本文件只约束
-  本项目自身的代码。
